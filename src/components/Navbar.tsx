@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, BookOpen, Users, Bell, Search, User } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Users, Bell, Search, User, ShieldCheck } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ const Navbar = () => {
     { name: 'Feed', path: '/feed', icon: Users },
     { name: 'Cursos', path: '/courses', icon: BookOpen },
     { name: 'Início', path: '/', icon: LayoutDashboard },
+    { name: 'Admin', path: '/admin', icon: ShieldCheck },
   ];
 
   return (
