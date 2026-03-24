@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Monitor, Wrench, CheckCircle, XCircle, Edit, Trash2 } from 'lucide-react';
-import { useAuth } from '@/components/AuthProvider';  // Fixed import path
+import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import LabComputerCard from '@/components/LabComputerCard';

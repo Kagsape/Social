@@ -83,7 +83,7 @@ const Signup = () => {
                   />
                 </div>
                 {errors.name && (
-                  <p className="text-red-500 text-sm">{errors.name.message}</p>
+                  <p className="text-red-500 text-sm">{String(errors.name.message)}</p>
                 )}
               </div>
 
@@ -100,7 +100,7 @@ const Signup = () => {
                   />
                 </div>
                 {errors.email && (
-                  <p className="text-red-500 text-sm">{errors.email.message}</p>
+                  <p className="text-red-500 text-sm">{String(errors.email.message)}</p>
                 )}
               </div>
 
@@ -133,7 +133,7 @@ const Signup = () => {
                   />
                 </div>
                 {errors.password && (
-                  <p className="text-red-500 text-sm">{errors.password.message}</p>
+                  <p className="text-red-500 text-sm">{String(errors.password.message)}</p>
                 )}
               </div>
 
