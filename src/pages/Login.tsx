@@ -1,17 +1,38 @@
 "use client";
 
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Link, useLocation } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { LayoutDashboard, ArrowLeft } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { showSuccess, showError } from '@/utils/toast';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
-  const handleSubmit = (e: React.FormEvent) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Lógica de login será integrada com Supabase
+    const { email, password } = new FormData(e.target as FormData);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.get('email') as string,
+        password: password as string,
+      });
+            if (error) {
+        throw error;
+      }
+      
+      showSuccess('Login bem-sucedido! Bem-vindo de volta.');
+      navigate('/feed');
+    } catch (error) {
+      console.error('Erro ao fazer login:', error);
+      showError('Email ou senha inválidos. Tente novamente.');
+    }
   };
 
   return (
@@ -66,7 +87,7 @@ const Login = () => {
               Google
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              Não tem uma conta? <a href="#" className="text-primary font-semibold hover:underline">Fale com o professor</a>
+              Não tem uma conta? <Link to="/signup" className="text-primary font-semibold hover:underline">Criar Conta</Link>
             </p>
           </CardFooter>
         </Card>
