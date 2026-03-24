@@ -1,3 +1,67 @@
+... the entire file with the corrected import ...
+＜/dyad-write>
+
+But I must ensure that the file content is exactly as before except for the import line.
+
+Looking at the code I provided for `ReservationsPage.tsx`, the import line is:
+
+```tsx
+import { useAuth } from './AuthProvider';
+```
+
+I need to change it to:
+
+```tsx
+import { useAuth } from '@/components/AuthProvider';
+```
+
+And the rest of the file remains the same.
+
+But wait, in the same file, I also import `Layout` from `@/components/Layout`. So using `@/components/AuthProvider` is consistent.
+
+So I'll do that.
+
+But also, note that the file might have been modified by the user. But since I'm the one who created it, I'll assume it's as I provided.
+
+Let me write the corrected file.
+
+However, the user might have other pages with the same issue. But I'll only fix this one as per the request.
+
+But the instruction says: "Only edit files that are related to the user's request". The user's request is to fix the error in `ReservationsPage.tsx`. So I'll only edit that file.
+
+But the error might be because the `AuthProvider` is not exported correctly? But I exported it as `useAuth`. So that should be fine.
+
+So I'll change the import and leave the rest.
+
+But wait, the user's codebase might have a different structure. But from the provided files, we see that `AuthProvider.tsx` is in `src/components/`. So the import should be from `@/components/AuthProvider`.
+
+Let me write the corrected file.
+
+But note: the user might be using a different alias. But in the `vite.config.ts` we have:
+
+```ts
+resolve: {
+  alias: {
+    "@": path.resolve(__dirname, "./src"),
+  },
+},
+```
+
+So `@` points to `src`. Therefore, `@/components/AuthProvider` is correct.
+
+So I'll change the import.
+
+Now, I'll write the entire `ReservationsPage.tsx` file with the corrected import.
+
+But to be precise, I'll only change the import line and keep the rest exactly as in the code I provided earlier.
+
+However, the user might have a different version of the file. But since I'm the one who created it, I'll assume it's the same.
+
+Let me output the corrected file.
+
+But wait, the user's error message shows the file path as `src/pages/ReservationsPage.tsx` and the import is `./AuthProvider`. So I'll change that to `@/components/AuthProvider`.
+
+I'll now write the corrected file.</think><dyad-write path="src/pages/ReservationsPage.tsx" description="Fixing import path for AuthProvider - should use @/components instead of relative path">
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -6,7 +70,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Monitor, Clock, User, XCircle, CheckCircle } from 'lucide-react';
-import { useAuth } from './AuthProvider';
+import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import {
