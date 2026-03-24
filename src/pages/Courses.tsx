@@ -11,66 +11,48 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const Courses = () => {
   const allCourses = [
     {
-      title: "Mastering React & Next.js 14",
-      instructor: "Diego Fernandes",
-      thumbnail: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=800&auto=format&fit=crop&q=60",
-      rating: 4.9,
-      students: 1240,
-      duration: "24h",
-      category: "Frontend"
+      title: "Apropriação Digital",
+      instructor: "Prof. da Sala de Informática",
+      thumbnail: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=60",
+      rating: 5.0,
+      students: 120,
+      duration: "20h",
+      category: "Básico"
     },
     {
-      title: "Node.js Avançado com TypeScript",
-      instructor: "Rodrigo Gonçalves",
-      thumbnail: "https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=800&auto=format&fit=crop&q=60",
+      title: "Python para Iniciantes",
+      instructor: "Prof. da Sala de Informática",
+      thumbnail: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=60",
+      rating: 4.9,
+      students: 60,
+      duration: "30h",
+      category: "Programação"
+    },
+    {
+      title: "Robótica com Arduino",
+      instructor: "Prof. da Sala de Informática",
+      thumbnail: "https://images.unsplash.com/photo-1553406830-ef2513450d76?w=800&auto=format&fit=crop&q=60",
       rating: 4.8,
-      students: 850,
-      duration: "18h",
-      category: "Backend"
+      students: 45,
+      duration: "25h",
+      category: "Hardware"
     },
     {
-      title: "UI/UX Design para Desenvolvedores",
-      instructor: "Tiago Luchtenberg",
-      thumbnail: "https://images.unsplash.com/photo-1586717791821-3f44a563dc4c?w=800&auto=format&fit=crop&q=60",
-      rating: 4.7,
-      students: 2100,
-      duration: "12h",
-      category: "Design"
-    },
-    {
-      title: "Python para Data Science",
-      instructor: "Letícia Silva",
-      thumbnail: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=60",
+      title: "Criação de Jogos com Scratch",
+      instructor: "Prof. da Sala de Informática",
+      thumbnail: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=60",
       rating: 4.9,
-      students: 3400,
-      duration: "32h",
-      category: "Data Science"
-    },
-    {
-      title: "Segurança da Informação: Ethical Hacking",
-      instructor: "Gabriel Pato",
-      thumbnail: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=60",
-      rating: 4.9,
-      students: 1500,
-      duration: "40h",
-      category: "Security"
-    },
-    {
-      title: "DevOps com Docker e Kubernetes",
-      instructor: "Fabrício Veronez",
-      thumbnail: "https://images.unsplash.com/photo-1605745341112-85968b193ef5?w=800&auto=format&fit=crop&q=60",
-      rating: 4.8,
-      students: 920,
-      duration: "28h",
-      category: "DevOps"
+      students: 85,
+      duration: "15h",
+      category: "Programação"
     }
   ];
 
   return (
     <Layout>
       <div className="mb-12">
-        <h1 className="text-4xl font-bold mb-4">Explore nossos Cursos</h1>
-        <p className="text-muted-foreground text-lg">Aprenda as tecnologias mais demandadas pelo mercado com especialistas.</p>
+        <h1 className="text-4xl font-bold mb-4">Cursos da Sala de Informática</h1>
+        <p className="text-muted-foreground text-lg">Explore as trilhas de conhecimento do CIEP 165.</p>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 mb-8 items-center justify-between">
@@ -83,9 +65,8 @@ const Courses = () => {
           <Tabs defaultValue="all" className="w-full">
             <TabsList className="bg-muted/50 rounded-full p-1">
               <TabsTrigger value="all" className="rounded-full px-6">Todos</TabsTrigger>
-              <TabsTrigger value="frontend" className="rounded-full px-6">Frontend</TabsTrigger>
-              <TabsTrigger value="backend" className="rounded-full px-6">Backend</TabsTrigger>
-              <TabsTrigger value="mobile" className="rounded-full px-6">Mobile</TabsTrigger>
+              <TabsTrigger value="programacao" className="rounded-full px-6">Programação</TabsTrigger>
+              <TabsTrigger value="hardware" className="rounded-full px-6">Hardware</TabsTrigger>
             </TabsList>
           </Tabs>
           <Button variant="outline" size="icon" className="rounded-full shrink-0">

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, Heart, Share2, Image as ImageIcon, Send } from 'lucide-react';
+import { MessageSquare, Heart, Share2, Image as ImageIcon, Send, Code2 } from 'lucide-react';
 
 const PostCard = ({ author, content, time, likes, comments, avatar }: any) => (
   <Card className="mb-6 border-none shadow-sm bg-white dark:bg-slate-900">
@@ -70,7 +70,7 @@ const Feed = () => {
                 <AvatarFallback>CN</AvatarFallback>
               </Avatar>
               <h3 className="font-bold text-lg">Seu Nome</h3>
-              <p className="text-xs text-muted-foreground mb-4">Fullstack Developer</p>
+              <p className="text-xs text-muted-foreground mb-4">Aluno CIEP 165</p>
               <div className="grid grid-cols-2 gap-4 py-4 border-t">
                 <div>
                   <p className="font-bold text-sm">1.2k</p>
@@ -87,7 +87,7 @@ const Feed = () => {
           <Card className="p-4 border-none shadow-sm">
             <h4 className="font-bold text-sm mb-4">Trending Topics</h4>
             <div className="space-y-3">
-              {['#javascript', '#reactjs', '#career', '#ai', '#web3'].map(tag => (
+              {['#python', '#arduino', '#scratch', '#ciep165', '#tecnologia'].map(tag => (
                 <div key={tag} className="text-sm text-blue-600 hover:underline cursor-pointer font-medium">
                   {tag}
                 </div>

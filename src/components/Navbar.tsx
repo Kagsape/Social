@@ -13,7 +13,7 @@ const Navbar = () => {
   const navItems = [
     { name: 'Feed', path: '/feed', icon: Users },
     { name: 'Cursos', path: '/courses', icon: BookOpen },
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Início', path: '/', icon: LayoutDashboard },
   ];
 
   return (
@@ -24,7 +24,7 @@ const Navbar = () => {
             <div className="bg-primary p-1.5 rounded-lg">
               <LayoutDashboard className="h-6 w-6 text-primary-foreground" />
             </div>
-            <span className="font-bold text-xl tracking-tight hidden md:inline-block">InfoHub</span>
+            <span className="font-bold text-xl tracking-tight hidden md:inline-block">CIEP 165</span>
           </Link>
           
           <div className="hidden md:flex items-center gap-1">
@@ -49,7 +49,7 @@ const Navbar = () => {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar cursos, posts..."
+              placeholder="Buscar cursos..."
               className="pl-9 rounded-full bg-muted/50 border-none focus-visible:ring-1"
             />
           </div>
@@ -58,9 +58,11 @@ const Navbar = () => {
             <Button variant="ghost" size="icon" className="rounded-full">
               <Bell className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="rounded-full border">
-              <User className="h-5 w-5" />
-            </Button>
+            <Link to="/login">
+              <Button variant="ghost" size="icon" className="rounded-full border">
+                <User className="h-5 w-5" />
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
