@@ -85,7 +85,8 @@ const Signup = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Senha</Label>
-                  <Input                    {...register('password', { required: true })}
+                  <Input
+                    {...register('password', { required: true })}
                     id="password"
                     type="password"
                     placeholder="Crie uma senha"
@@ -98,7 +99,7 @@ const Signup = () => {
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirmar Senha</Label>
                   <Input
-                    {...register('confirmPassword', { required: true, validate: (value) => value === data.password })}
+                    {...register('confirmPassword', { required: true, validate: (value, form) => value === form.password })}
                     id="confirmPassword"
                     type="password"
                     placeholder="Confirme sua senha"
@@ -109,7 +110,8 @@ const Signup = () => {
                   )}
                 </div>
                 <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg bg-primary">
-                  Criar Conta                </Button>
+                  Criar Conta
+                </Button>
               </form>
             </CardContent>
           </Card>
