@@ -17,7 +17,7 @@ import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import LabManagement from "./pages/LabManagement";
-import ReservationsPage from "./pages/ReservationsPage";
+import ReservationsPage from "./pages/ReservationsPage";  // Fixed import
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
