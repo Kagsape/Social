@@ -17,6 +17,8 @@ import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import LabManagement from "./pages/LabManagement";
+import AdminCoursesPage from "./pages/AdminCoursesPage";
+import ReservationsPage from "./pages/ReservationsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
