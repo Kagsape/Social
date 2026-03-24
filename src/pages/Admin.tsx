@@ -61,7 +61,7 @@ const Admin = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="border-none shadow-sm bg-blue-50 dark:bg-blue-900/20">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-blue-600">Total de Alunos</骸
+                  <CardTitle className="text-sm font-medium text-blue-600">Total de Alunos</CardTitle>
                   <div className="text-3xl font-bold">312</div>
                 </CardHeader>
                 <CardContent>
