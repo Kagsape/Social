@@ -82,14 +82,12 @@ const Login = () => {
                 <Label htmlFor="email">E-mail</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
+                  <Input                    id="email"
                     type="email"
                     placeholder="seu@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="pl-10 rounded-xl"
+                    required                    className="pl-10 rounded-xl"
                   />
                 </div>
               </div>
@@ -121,8 +119,7 @@ const Login = () => {
                 <span className="bg-background px-2 text-muted-foreground">Ou continue com</span>
               </div>
             </div>
-            <Button 
-              variant="outline" 
+            <Button               variant="outline" 
               className="w-full rounded-xl" 
               onClick={handleGoogleSignIn}
               disabled={loading}
