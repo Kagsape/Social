@@ -2,20 +2,67 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, BookOpen, Users, Bell, Search, User, ShieldCheck } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  BookOpen, 
+  Users, 
+  Bell, 
+  Search, 
+  User, 
+  ShieldCheck,
+  Monitor,
+  Calendar,
+  BarChart3,
+  Settings
+} from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from './AuthProvider';
+import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
   const location = useLocation();
+  const { userProfile } = useAuth();
   
-  const navItems = [
-    { name: 'Feed', path: '/feed', icon: Users },
-    { name: 'Cursos', path: '/courses', icon: BookOpen },
-    { name: 'Início', path: '/', icon: LayoutDashboard },
-    { name: 'Admin', path: '/admin', icon: ShieldCheck },
-  ];
+  const getNavItems = () => {
+    const commonItems = [
+      { name: 'Início', path: '/', icon: LayoutDashboard },
+    ];
+
+    if (!userProfile) {
+      return commonItems;
+    }
+
+    const roleBasedItems = [];
+
+    if (userProfile.role === 'student') {
+      roleBasedItems.push(
+        { name: 'Feed', path: '/feed', icon: Users },
+        { name: 'Cursos', path: '/courses', icon: BookOpen },
+        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }
+      );
+    } else if (userProfile.role === 'teacher') {
+      roleBasedItems.push(
+        { name: 'Feed', path: '/feed', icon: Users },
+        { name: 'Cursos', path: '/courses', icon: BookOpen },
+        { name: 'Painel', path: '/teacher', icon: LayoutDashboard }
+      );
+    } else if (userProfile.role === 'admin') {
+      roleBasedItems.push(
+        { name: 'Admin', path: '/admin', icon: ShieldCheck },
+        { name: 'Cursos', path: '/courses', icon: BookOpen },
+        { name: 'Laboratório', path: '/admin/lab', icon: Monitor },
+        { name: 'Reservas', path: '/admin/reservations', icon: Calendar },
+        { name: 'Usuários', path: '/admin/users', icon: Users },
+        { name: 'Config', path: '/admin/settings', icon: Settings }
+      );
+    }
+
+    return [...commonItems, ...roleBasedItems];
+  };
+
+  const navItems = getNavItems();
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -50,15 +97,13 @@ const Navbar = () => {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar cursos..."
+              placeholder="Buscar..."
               className="pl-9 rounded-full bg-muted/50 border-none focus-visible:ring-1"
             />
           </div>
           
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <Bell className="h-5 w-5" />
-            </Button>
+            {userProfile && <NotificationBell />}
             <Link to="/login">
               <Button variant="ghost" size="icon" className="rounded-full border">
                 <User className="h-5 w-5" />
