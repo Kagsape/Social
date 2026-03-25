@@ -1,43 +1,40 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import CourseCard from '@/components/CourseCard';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop } from 'lucide-react';
+import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop, BookOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
-  const featuredCourses = [
-    {
-      title: "Apropriação Digital",
-      instructor: "Prof. da Sala de Informática",
-      thumbnail: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=60",
-      rating: 5.0,
-      students: 120,
-      duration: "20h",
-      category: "Básico"
-    },
-    {
-      title: "Lógica com Scratch",
-      instructor: "Prof. da Sala de Informática",
-      thumbnail: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=60",
-      rating: 4.9,
-      students: 85,
-      duration: "15h",
-      category: "Programação"
-    },
-    {
-      title: "Introdução ao Python",
-      instructor: "Prof. da Sala de Informática",
-      thumbnail: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=60",
-      rating: 4.8,
-      students: 60,
-      duration: "30h",
-      category: "Programação"
-    }
-  ];
+  const [featuredCourses, setFeaturedCourses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFeaturedCourses = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('courses')
+          .select(`
+            *,
+            users!courses_teacher_id_fkey (name)
+          `)
+          .limit(3);
+
+        if (error) throw error;
+        setFeaturedCourses(data || []);
+      } catch (error) {
+        console.error('Error fetching featured courses:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFeaturedCourses();
+  }, []);
 
   return (
     <Layout>
@@ -94,11 +91,33 @@ const Index = () => {
           </Link>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {featuredCourses.map((course, index) => (
-            <CourseCard key={index} {...course} />
-          ))}
-        </div>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-64 bg-muted animate-pulse rounded-2xl"></div>
+            ))}
+          </div>
+        ) : featuredCourses.length === 0 ? (
+          <div className="text-center py-12 bg-muted/30 rounded-2xl border border-dashed">
+            <BookOpen className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">Nenhum curso disponível no momento.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {featuredCourses.map((course) => (
+              <CourseCard 
+                key={course.id} 
+                title={course.name}
+                instructor={course.users?.name || 'A definir'}
+                thumbnail="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=60"
+                rating={4.9}
+                students={60}
+                duration="20h"
+                category={course.category || 'Tecnologia'}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Community Section */}
