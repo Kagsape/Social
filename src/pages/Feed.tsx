@@ -23,23 +23,38 @@ const Feed = () => {
 
   const fetchPosts = async () => {
     try {
+      // A consulta abaixo exige que exista uma Foreign Key entre posts.user_id e users.id
       const { data, error } = await supabase
         .from('posts')
         .select(`
-          *,
-          users (id, name, avatar_url, role)
+          id,
+          content,
+          created_at,
+          user_id,
+          users (
+            id,
+            name,
+            avatar_url,
+            role
+          )
         `)
         .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Erro Supabase:', error);
-        showError(`Erro ao carregar posts: ${error.message}`);
+        // Se o erro de relacionamento persistir, tentamos buscar sem o join para não quebrar a tela
+        if (error.message.includes('relationship')) {
+          const { data: simpleData } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
+          setPosts(simpleData || []);
+          showError("Aviso: O vínculo entre tabelas não foi encontrado no Supabase. Siga as instruções no chat.");
+        } else {
+          showError(`Erro ao carregar posts: ${error.message}`);
+        }
         return;
       }
       setPosts(data || []);
     } catch (error: any) {
       console.error('Erro inesperado:', error);
-      showError('Erro de conexão com o banco de dados.');
     } finally {
       setLoading(false);
     }
@@ -79,7 +94,7 @@ const Feed = () => {
       fetchPosts();
     } catch (error: any) {
       console.error('Error creating post:', error);
-      showError(`Não foi possível publicar: ${error.message}. Verifique se a tabela 'posts' existe.`);
+      showError(`Erro ao publicar: ${error.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -151,7 +166,7 @@ const Feed = () => {
         <div className="space-y-4">
           {posts.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground bg-white dark:bg-slate-900 rounded-xl border border-dashed">
-              Nenhum post encontrado. Se você acabou de criar a tabela, tente publicar algo!
+              Nenhum post encontrado. Certifique-se de rodar o SQL no Supabase!
             </div>
           ) : (
             posts.map(post => (
