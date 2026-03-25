@@ -24,7 +24,6 @@ const Feed = () => {
   useEffect(() => {
     fetchPosts();
 
-    // Real-time subscription for new posts
     const channel = supabase
       .channel('public:posts')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
@@ -59,6 +58,11 @@ const Feed = () => {
 
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
+    
+    if (!userProfile) {
+      showError('Perfil de usuário não encontrado. Tente fazer login novamente.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -74,9 +78,9 @@ const Feed = () => {
       showSuccess('Post publicado!');
       setNewPost('');
       fetchPosts();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating post:', error);
-      showError('Erro ao publicar post');
+      showError(error.message || 'Erro ao publicar post');
     } finally {
       setSubmitting(false);
     }
@@ -143,7 +147,7 @@ const Feed = () => {
               </Avatar>
               <div className="flex-1 space-y-4">
                 <Textarea
-                  placeholder={`O que você está pensando, ${userProfile?.name?.split(' ')[0]}?`}
+                  placeholder={`O que você está pensando, ${userProfile?.name?.split(' ')[0] || 'usuário'}?`}
                   value={newPost}
                   onChange={(e) => setNewPost(e.target.value)}
                   className="min-h-[100px] resize-none border-none focus-visible:ring-0 bg-muted/30 rounded-xl p-4"
