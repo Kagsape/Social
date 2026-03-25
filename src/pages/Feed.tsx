@@ -14,6 +14,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import CommentSection from '@/components/CommentSection';
 
 const Feed = () => {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -21,10 +22,10 @@ const Feed = () => {
   const [newPost, setNewPost] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
 
   const fetchPosts = useCallback(async () => {
     try {
-      // Consulta com joins para buscar autor e curtidas
       const { data, error } = await supabase
         .from('posts')
         .select(`
@@ -44,27 +45,16 @@ const Feed = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('[Feed] Erro ao buscar posts:', error);
-        
-        // Fallback simples se a consulta complexa falhar
-        const { data: simpleData, error: simpleError } = await supabase
-          .from('posts')
-          .select('*')
-          .order('created_at', { ascending: false });
-          
-        if (simpleError) throw simpleError;
-        setPosts(simpleData || []);
-      } else {
-        const processedPosts = (data || []).map(post => ({
-          ...post,
-          likes_count: Array.isArray(post.likes) ? post.likes.length : 0,
-          has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user?.id) : false
-        }));
-        setPosts(processedPosts);
-      }
+      if (error) throw error;
+
+      const processedPosts = (data || []).map(post => ({
+        ...post,
+        likes_count: Array.isArray(post.likes) ? post.likes.length : 0,
+        has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user?.id) : false
+      }));
+      setPosts(processedPosts);
     } catch (error: any) {
-      console.error('[Feed] Erro crítico:', error);
+      console.error('[Feed] Erro ao buscar posts:', error);
       showError('Não foi possível carregar os posts.');
     } finally {
       setLoading(false);
@@ -105,7 +95,6 @@ const Feed = () => {
       setNewPost('');
       await fetchPosts();
     } catch (error: any) {
-      console.error('[Feed] Erro ao criar post:', error);
       showError('Erro ao publicar. Tente novamente.');
     } finally {
       setSubmitting(false);
@@ -123,7 +112,8 @@ const Feed = () => {
         const { error } = await supabase
           .from('likes')
           .delete()
-          .match({ post_id: postId, user_id: user.id });
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
@@ -131,7 +121,7 @@ const Feed = () => {
           .insert({ post_id: postId, user_id: user.id });
         if (error) throw error;
       }
-      // Atualização local rápida para melhor UX
+      
       setPosts(current => current.map(p => {
         if (p.id === postId) {
           return {
@@ -148,6 +138,19 @@ const Feed = () => {
     }
   };
 
+  const handleShare = (postId: string) => {
+    const url = `${window.location.origin}/feed#post-${postId}`;
+    navigator.clipboard.writeText(url);
+    showSuccess('Link do post copiado para a área de transferência!');
+  };
+
+  const toggleComments = (postId: string) => {
+    setActiveComments(prev => ({
+      ...prev,
+      [postId]: !prev[postId]
+    }));
+  };
+
   const deletePost = async (postId: string) => {
     if (!confirm('Tem certeza que deseja excluir este post?')) return;
 
@@ -161,8 +164,7 @@ const Feed = () => {
       showSuccess('Post removido com sucesso.');
       setPosts(current => current.filter(p => p.id !== postId));
     } catch (error: any) {
-      console.error('[Feed] Erro ao excluir post:', error);
-      showError('Você não tem permissão para excluir este post.');
+      showError('Erro ao excluir post.');
     }
   };
 
@@ -229,7 +231,7 @@ const Feed = () => {
             </Card>
           ) : (
             posts.map(post => (
-              <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900">
+              <Card key={post.id} id={`post-${post.id}`} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -285,15 +287,28 @@ const Feed = () => {
                       <Heart className={cn("h-5 w-5", post.has_liked && "fill-current")} />
                       <span className="font-bold">{post.likes_count}</span>
                     </button>
-                    <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                    <button 
+                      onClick={() => toggleComments(post.id)}
+                      className={cn(
+                        "flex items-center gap-2 text-sm transition-colors",
+                        activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary"
+                      )}
+                    >
                       <MessageSquare className="h-5 w-5" />
                       <span className="font-medium">Comentar</span>
                     </button>
-                    <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                    <button 
+                      onClick={() => handleShare(post.id)}
+                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+                    >
                       <Share2 className="h-5 w-5" />
                       <span className="font-medium">Compartilhar</span>
                     </button>
                   </div>
+
+                  {activeComments[post.id] && (
+                    <CommentSection postId={post.id} />
+                  )}
                 </CardContent>
               </Card>
             ))
