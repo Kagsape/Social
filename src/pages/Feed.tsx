@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 const Feed = () => {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -35,24 +36,26 @@ const Feed = () => {
             name,
             avatar_url,
             role
+          ),
+          likes (
+            user_id
           )
         `)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Erro Supabase:', error);
-        // Se ainda der erro de relacionamento, busca apenas os posts sem os dados do usuário
-        if (error.message.includes('relationship')) {
-          const { data: simpleData } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
-          setPosts(simpleData || []);
-        } else {
-          showError(`Erro ao carregar: ${error.message}`);
-        }
-        return;
-      }
-      setPosts(data || []);
+      if (error) throw error;
+
+      // Processar posts para incluir contagem de likes e se o usuário atual curtiu
+      const processedPosts = (data || []).map(post => ({
+        ...post,
+        likes_count: post.likes?.length || 0,
+        has_liked: post.likes?.some((l: any) => l.user_id === user?.id)
+      }));
+
+      setPosts(processedPosts);
     } catch (error: any) {
-      console.error('Erro inesperado:', error);
+      console.error('Erro ao carregar posts:', error);
+      showError('Erro ao carregar o feed');
     } finally {
       setLoading(false);
     }
@@ -62,16 +65,15 @@ const Feed = () => {
     fetchPosts();
 
     const channel = supabase
-      .channel('public:posts')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
-        fetchPosts();
-      })
+      .channel('feed_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchPosts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => fetchPosts())
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user?.id]);
 
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
@@ -91,10 +93,34 @@ const Feed = () => {
       setNewPost('');
       fetchPosts();
     } catch (error: any) {
-      console.error('Error creating post:', error);
       showError(`Erro ao publicar: ${error.message}`);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const toggleLike = async (postId: string, hasLiked: boolean) => {
+    if (!user) return;
+
+    try {
+      if (hasLiked) {
+        await supabase
+          .from('likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+      } else {
+        await supabase
+          .from('likes')
+          .insert({
+            post_id: postId,
+            user_id: user.id
+          });
+      }
+      // O fetchPosts será chamado pelo canal de tempo real, mas chamamos aqui para feedback imediato
+      fetchPosts();
+    } catch (error) {
+      console.error('Erro ao curtir:', error);
     }
   };
 
@@ -108,10 +134,11 @@ const Feed = () => {
         .eq('id', postId);
 
       if (error) throw error;
-      showSuccess('Post excluído');
+      showSuccess('Post excluído com sucesso');
       fetchPosts();
-    } catch (error) {
-      showError('Erro ao excluir post');
+    } catch (error: any) {
+      console.error('Erro ao excluir:', error);
+      showError('Você não tem permissão para excluir este post ou ocorreu um erro no servidor.');
     }
   };
 
@@ -196,9 +223,15 @@ const Feed = () => {
                 <CardContent className="space-y-4">
                   <p className="whitespace-pre-wrap text-sm leading-relaxed">{post.content}</p>
                   <div className="flex items-center gap-6 pt-4 border-t">
-                    <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-red-500 transition-colors">
-                      <Heart className="h-5 w-5" />
-                      <span className="font-medium">0</span>
+                    <button 
+                      onClick={() => toggleLike(post.id, post.has_liked)}
+                      className={cn(
+                        "flex items-center gap-2 text-sm transition-colors",
+                        post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
+                      )}
+                    >
+                      <Heart className={cn("h-5 w-5", post.has_liked && "fill-current")} />
+                      <span className="font-medium">{post.likes_count}</span>
                     </button>
                     <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
                       <MessageSquare className="h-5 w-5" />
