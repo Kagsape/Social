@@ -12,6 +12,7 @@ import CoursesPage from "./pages/CoursesPage";
 import CourseDetails from "./pages/CourseDetails";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import Profile from "./pages/Profile";
 import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -42,6 +43,11 @@ const App = () => (
             <Route path="/feed" element={
               <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
                 <Feed />
+              </ProtectedRoute>
+            } />
+            <Route path="/profile" element={
+              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
+                <Profile />
               </ProtectedRoute>
             } />
             <Route path="/courses" element={

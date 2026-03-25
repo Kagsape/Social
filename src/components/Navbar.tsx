@@ -13,7 +13,8 @@ import {
   Monitor,
   Calendar,
   BarChart3,
-  Settings
+  Settings,
+  UserCircle
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -104,11 +105,23 @@ const Navbar = () => {
           
           <div className="flex items-center gap-2">
             {userProfile && <NotificationBell />}
-            <Link to="/login">
-              <Button variant="ghost" size="icon" className="rounded-full border">
-                <User className="h-5 w-5" />
-              </Button>
-            </Link>
+            {userProfile ? (
+              <Link to="/profile">
+                <Button variant="ghost" size="icon" className="rounded-full border overflow-hidden">
+                  {userProfile.avatar_url ? (
+                    <img src={userProfile.avatar_url} alt="Perfil" className="h-full w-full object-cover" />
+                  ) : (
+                    <User className="h-5 w-5" />
+                  )}
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/login">
+                <Button variant="ghost" size="icon" className="rounded-full border">
+                  <User className="h-5 w-5" />
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </div>

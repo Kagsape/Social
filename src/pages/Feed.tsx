@@ -21,9 +21,34 @@ const Feed = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  const fetchPosts = async () => {
+    try {
+      // Buscamos os posts e fazemos o join com a tabela de usuários
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          users (id, name, avatar_url, role),
+          likes (user_id)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao buscar posts:', error);
+        return;
+      }
+      setPosts(data || []);
+    } catch (error) {
+      console.error('Erro inesperado ao buscar posts:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchPosts();
 
+    // Inscrição em tempo real para novos posts
     const channel = supabase
       .channel('public:posts')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
@@ -36,36 +61,16 @@ const Feed = () => {
     };
   }, []);
 
-  const fetchPosts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          users (id, name, avatar_url, role),
-          likes (user_id)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setPosts(data || []);
-    } catch (error) {
-      console.error('Error fetching posts:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
     
-    // If profile is missing, try to refresh it once before giving up
-    if (!userProfile) {
-      await refreshProfile();
-    }
-
     setSubmitting(true);
     try {
+      // Garantimos que o perfil existe antes de postar
+      if (!userProfile) {
+        await refreshProfile();
+      }
+
       const { error } = await supabase
         .from('posts')
         .insert({
@@ -77,10 +82,11 @@ const Feed = () => {
 
       showSuccess('Post publicado!');
       setNewPost('');
-      fetchPosts();
+      // Forçamos a atualização local imediata
+      await fetchPosts();
     } catch (error: any) {
       console.error('Error creating post:', error);
-      showError(error.message || 'Erro ao publicar post. Verifique sua conexão.');
+      showError(error.message || 'Erro ao publicar post. Verifique se a tabela posts existe no Supabase.');
     } finally {
       setSubmitting(false);
     }
@@ -157,9 +163,6 @@ const Feed = () => {
                     <Button variant="ghost" size="sm" className="rounded-full gap-2 text-muted-foreground">
                       <ImageIcon className="h-4 w-4" /> Foto
                     </Button>
-                    <Button variant="ghost" size="sm" className="rounded-full gap-2 text-muted-foreground">
-                      <ImageIcon className="h-4 w-4" /> Vídeo
-                    </Button>
                   </div>
                   <Button 
                     onClick={createPost} 
@@ -198,7 +201,7 @@ const Feed = () => {
                         </Avatar>
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="font-bold text-sm">{post.users?.name}</p>
+                            <p className="font-bold text-sm">{post.users?.name || 'Usuário Desconhecido'}</p>
                             {post.users?.role === 'teacher' && (
                               <Badge variant="secondary" className="text-[10px] h-4 px-1">Professor</Badge>
                             )}
