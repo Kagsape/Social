@@ -24,6 +24,7 @@ const Feed = () => {
 
   const fetchPosts = async () => {
     try {
+      // Consulta robusta com relacionamentos
       const { data, error } = await supabase
         .from('posts')
         .select(`
@@ -43,19 +44,30 @@ const Feed = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro detalhado do Supabase:', error);
+        
+        // Fallback: Se a consulta complexa falhar, tenta buscar apenas os posts
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('posts')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        if (fallbackError) throw fallbackError;
+        setPosts(fallbackData || []);
+        return;
+      }
 
-      // Processar posts para incluir contagem de likes e se o usuário atual curtiu
       const processedPosts = (data || []).map(post => ({
         ...post,
-        likes_count: post.likes?.length || 0,
-        has_liked: post.likes?.some((l: any) => l.user_id === user?.id)
+        likes_count: Array.isArray(post.likes) ? post.likes.length : 0,
+        has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user?.id) : false
       }));
 
       setPosts(processedPosts);
     } catch (error: any) {
       console.error('Erro ao carregar posts:', error);
-      showError('Erro ao carregar o feed');
+      showError('Erro ao carregar o feed. Verifique o console.');
     } finally {
       setLoading(false);
     }
@@ -65,7 +77,7 @@ const Feed = () => {
     fetchPosts();
 
     const channel = supabase
-      .channel('feed_changes')
+      .channel('feed_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchPosts())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => fetchPosts())
       .subscribe();
@@ -117,7 +129,6 @@ const Feed = () => {
             user_id: user.id
           });
       }
-      // O fetchPosts será chamado pelo canal de tempo real, mas chamamos aqui para feedback imediato
       fetchPosts();
     } catch (error) {
       console.error('Erro ao curtir:', error);
@@ -134,11 +145,10 @@ const Feed = () => {
         .eq('id', postId);
 
       if (error) throw error;
-      showSuccess('Post excluído com sucesso');
+      showSuccess('Post excluído');
       fetchPosts();
     } catch (error: any) {
-      console.error('Erro ao excluir:', error);
-      showError('Você não tem permissão para excluir este post ou ocorreu um erro no servidor.');
+      showError('Erro ao excluir post');
     }
   };
 
