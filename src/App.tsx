@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Index from "./pages/Index";
 import Feed from "./pages/Feed";
 import CoursesPage from "./pages/CoursesPage";
+import CourseDetails from "./pages/CourseDetails";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import StudentDashboard from "./pages/StudentDashboard";
@@ -46,6 +47,11 @@ const App = () => (
             <Route path="/courses" element={
               <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
                 <CoursesPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/courses/:id" element={
+              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
+                <CourseDetails />
               </ProtectedRoute>
             } />
 
