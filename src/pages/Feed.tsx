@@ -23,7 +23,6 @@ const Feed = () => {
 
   const fetchPosts = async () => {
     try {
-      // A consulta abaixo exige que exista uma Foreign Key entre posts.user_id e users.id
       const { data, error } = await supabase
         .from('posts')
         .select(`
@@ -42,13 +41,12 @@ const Feed = () => {
 
       if (error) {
         console.error('Erro Supabase:', error);
-        // Se o erro de relacionamento persistir, tentamos buscar sem o join para não quebrar a tela
+        // Se ainda der erro de relacionamento, busca apenas os posts sem os dados do usuário
         if (error.message.includes('relationship')) {
           const { data: simpleData } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
           setPosts(simpleData || []);
-          showError("Aviso: O vínculo entre tabelas não foi encontrado no Supabase. Siga as instruções no chat.");
         } else {
-          showError(`Erro ao carregar posts: ${error.message}`);
+          showError(`Erro ao carregar: ${error.message}`);
         }
         return;
       }
@@ -166,7 +164,7 @@ const Feed = () => {
         <div className="space-y-4">
           {posts.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground bg-white dark:bg-slate-900 rounded-xl border border-dashed">
-              Nenhum post encontrado. Certifique-se de rodar o SQL no Supabase!
+              Nenhum post encontrado. Comece a conversa!
             </div>
           ) : (
             posts.map(post => (
@@ -184,7 +182,7 @@ const Feed = () => {
                           {post.users?.role === 'teacher' && <Badge variant="secondary" className="text-[10px] h-4 px-1">Professor</Badge>}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: ptBR })}
+                          {post.created_at ? formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: ptBR }) : 'Agora'}
                         </p>
                       </div>
                     </div>
