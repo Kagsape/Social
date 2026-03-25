@@ -1,3 +1,5 @@
+-- Ordem de criação: users -> posts -> likes
+
 -- Tabela de Perfis de Usuários
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -16,7 +18,7 @@ CREATE TABLE IF NOT EXISTS public.posts (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabela de Curtidas (Opcional)
+-- Tabela de Curtidas
 CREATE TABLE IF NOT EXISTS public.likes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
@@ -25,15 +27,22 @@ CREATE TABLE IF NOT EXISTS public.likes (
   UNIQUE(post_id, user_id)
 );
 
--- Habilitar RLS
+-- RLS e Políticas
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.likes ENABLE ROW LEVEL SECURITY;
 
--- Políticas de Segurança
-CREATE POLICY "Leitura pública de usuários" ON public.users FOR SELECT USING (true);
-CREATE POLICY "Usuários editam próprio perfil" ON public.users FOR UPDATE USING (auth.uid() = id);
+-- Políticas simplificadas
+CREATE POLICY "users_read_all" ON public.users FOR SELECT USING (true);
+CREATE POLICY "users_update_own" ON public.users FOR UPDATE USING (auth.uid() = id);
 
-CREATE POLICY "Leitura pública de posts" ON public.posts FOR SELECT USING (true);
-CREATE POLICY "Usuários autenticados postam" ON public.posts FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Usuários deletam próprios posts" ON public.posts FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "posts_read_all" ON public.posts FOR SELECT USING (true);
+CREATE POLICY "posts_insert_auth" ON public.posts FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "posts_delete_policy" ON public.posts FOR DELETE USING (
+  auth.uid() = user_id OR 
+  EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+);
+
+CREATE POLICY "likes_read_all" ON public.likes FOR SELECT USING (true);
+CREATE POLICY "likes_insert_auth" ON public.likes FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "likes_delete_own" ON public.likes FOR DELETE USING (auth.uid() = user_id);
