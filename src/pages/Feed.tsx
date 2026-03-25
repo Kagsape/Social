@@ -15,7 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const Feed = () => {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, loading: authLoading, refreshProfile } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
   const [newPost, setNewPost] = useState('');
   const [loading, setLoading] = useState(true);
@@ -59,9 +59,9 @@ const Feed = () => {
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
     
+    // If profile is missing, try to refresh it once before giving up
     if (!userProfile) {
-      showError('Perfil de usuário não encontrado. Tente fazer login novamente.');
-      return;
+      await refreshProfile();
     }
 
     setSubmitting(true);
@@ -80,7 +80,7 @@ const Feed = () => {
       fetchPosts();
     } catch (error: any) {
       console.error('Error creating post:', error);
-      showError(error.message || 'Erro ao publicar post');
+      showError(error.message || 'Erro ao publicar post. Verifique sua conexão.');
     } finally {
       setSubmitting(false);
     }
@@ -125,7 +125,7 @@ const Feed = () => {
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">

@@ -23,6 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string, currentUser: User) => {
     try {
+      // Try to get the profile
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -32,12 +33,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       if (!data) {
-        // Fallback: Create profile if it doesn't exist
+        // If profile doesn't exist, create it immediately
         const { data: newData, error: insertError } = await supabase
           .from('users')
           .insert({
             id: userId,
-            name: currentUser.user_metadata?.name || currentUser.email?.split('@')[0],
+            name: currentUser.user_metadata?.name || currentUser.email?.split('@')[0] || 'Usuário',
             email: currentUser.email,
             role: currentUser.user_metadata?.role || 'student'
           })
@@ -46,7 +47,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (insertError) {
           console.error('Error creating missing profile:', insertError);
-          setUserProfile(null);
+          // If insert fails, we still set a temporary profile object to avoid UI blocks
+          setUserProfile({
+            id: userId,
+            name: currentUser.user_metadata?.name || currentUser.email?.split('@')[0] || 'Usuário',
+            email: currentUser.email,
+            role: 'student'
+          });
         } else {
           setUserProfile(newData);
         }
@@ -55,7 +62,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      setUserProfile(null);
+      // Fallback to metadata if database fetch fails
+      setUserProfile({
+        id: userId,
+        name: currentUser.user_metadata?.name || currentUser.email?.split('@')[0] || 'Usuário',
+        email: currentUser.email,
+        role: currentUser.user_metadata?.role || 'student'
+      });
     }
   };
 
@@ -67,9 +80,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      const currentUser = session?.user ?? null;
+      const { data: { session: initialSession } } = await supabase.auth.getSession();
+      setSession(initialSession);
+      const currentUser = initialSession?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
         await fetchUserProfile(currentUser.id, currentUser);
@@ -80,9 +93,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        const currentUser = session?.user ?? null;
+      async (event, currentSession) => {
+        setSession(currentSession);
+        const currentUser = currentSession?.user ?? null;
         setUser(currentUser);
         if (currentUser) {
           await fetchUserProfile(currentUser.id, currentUser);
