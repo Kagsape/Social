@@ -8,16 +8,16 @@ import { AuthProvider } from "./components/AuthProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Index from "./pages/Index";
 import Feed from "./pages/Feed";
-import Courses from "./pages/Courses";
 import CoursesPage from "./pages/CoursesPage";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-import Admin from "./pages/Admin";
 import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import LabManagement from "./pages/LabManagement";
 import AdminCoursesPage from "./pages/AdminCoursesPage";
+import AdminUsersPage from "./pages/AdminUsersPage";
+import AdminSettingsPage from "./pages/AdminSettingsPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
@@ -36,6 +36,8 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            
+            {/* Common Protected Routes */}
             <Route path="/feed" element={
               <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
                 <Feed />
@@ -46,13 +48,15 @@ const App = () => (
                 <CoursesPage />
               </ProtectedRoute>
             } />
+
+            {/* Admin Routes */}
             <Route path="/admin" element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminDashboard />
               </ProtectedRoute>
             } />
             <Route path="/admin/courses" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher']}>
+              <ProtectedRoute allowedRoles={['admin']}>
                 <AdminCoursesPage />
               </ProtectedRoute>
             } />
@@ -66,6 +70,18 @@ const App = () => (
                 <ReservationsPage />
               </ProtectedRoute>
             } />
+            <Route path="/admin/users" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminUsersPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/settings" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminSettingsPage />
+              </ProtectedRoute>
+            } />
+
+            {/* Role Specific Dashboards */}
             <Route path="/dashboard" element={
               <ProtectedRoute allowedRoles={['student']}>
                 <StudentDashboard />
@@ -76,6 +92,7 @@ const App = () => (
                 <TeacherDashboard />
               </ProtectedRoute>
             } />
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
