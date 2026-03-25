@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
@@ -22,9 +22,9 @@ const Feed = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
-      // Consulta robusta com relacionamentos
+      // Consulta com joins para buscar autor e curtidas
       const { data, error } = await supabase
         .from('posts')
         .select(`
@@ -45,47 +45,47 @@ const Feed = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Erro detalhado do Supabase:', error);
+        console.error('[Feed] Erro ao buscar posts:', error);
         
-        // Fallback: Se a consulta complexa falhar, tenta buscar apenas os posts
-        const { data: fallbackData, error: fallbackError } = await supabase
+        // Fallback simples se a consulta complexa falhar
+        const { data: simpleData, error: simpleError } = await supabase
           .from('posts')
           .select('*')
           .order('created_at', { ascending: false });
           
-        if (fallbackError) throw fallbackError;
-        setPosts(fallbackData || []);
-        return;
+        if (simpleError) throw simpleError;
+        setPosts(simpleData || []);
+      } else {
+        const processedPosts = (data || []).map(post => ({
+          ...post,
+          likes_count: Array.isArray(post.likes) ? post.likes.length : 0,
+          has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user?.id) : false
+        }));
+        setPosts(processedPosts);
       }
-
-      const processedPosts = (data || []).map(post => ({
-        ...post,
-        likes_count: Array.isArray(post.likes) ? post.likes.length : 0,
-        has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user?.id) : false
-      }));
-
-      setPosts(processedPosts);
     } catch (error: any) {
-      console.error('Erro ao carregar posts:', error);
-      showError('Erro ao carregar o feed. Verifique o console.');
+      console.error('[Feed] Erro crítico:', error);
+      showError('Não foi possível carregar os posts.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
-    fetchPosts();
+    if (!authLoading) {
+      fetchPosts();
 
-    const channel = supabase
-      .channel('feed_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchPosts())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => fetchPosts())
-      .subscribe();
+      const channel = supabase
+        .channel('feed_changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchPosts())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => fetchPosts())
+        .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id]);
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [authLoading, fetchPosts]);
 
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
@@ -103,40 +103,53 @@ const Feed = () => {
 
       showSuccess('Post publicado!');
       setNewPost('');
-      fetchPosts();
+      await fetchPosts();
     } catch (error: any) {
-      showError(`Erro ao publicar: ${error.message}`);
+      console.error('[Feed] Erro ao criar post:', error);
+      showError('Erro ao publicar. Tente novamente.');
     } finally {
       setSubmitting(false);
     }
   };
 
   const toggleLike = async (postId: string, hasLiked: boolean) => {
-    if (!user) return;
+    if (!user) {
+      showError('Você precisa estar logado para curtir.');
+      return;
+    }
 
     try {
       if (hasLiked) {
-        await supabase
+        const { error } = await supabase
           .from('likes')
           .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
+          .match({ post_id: postId, user_id: user.id });
+        if (error) throw error;
       } else {
-        await supabase
+        const { error } = await supabase
           .from('likes')
-          .insert({
-            post_id: postId,
-            user_id: user.id
-          });
+          .insert({ post_id: postId, user_id: user.id });
+        if (error) throw error;
       }
-      fetchPosts();
-    } catch (error) {
-      console.error('Erro ao curtir:', error);
+      // Atualização local rápida para melhor UX
+      setPosts(current => current.map(p => {
+        if (p.id === postId) {
+          return {
+            ...p,
+            has_liked: !hasLiked,
+            likes_count: hasLiked ? p.likes_count - 1 : p.likes_count + 1
+          };
+        }
+        return p;
+      }));
+    } catch (error: any) {
+      console.error('[Feed] Erro ao curtir:', error);
+      showError('Erro ao processar curtida.');
     }
   };
 
   const deletePost = async (postId: string) => {
-    if (!confirm('Deseja excluir este post?')) return;
+    if (!confirm('Tem certeza que deseja excluir este post?')) return;
 
     try {
       const { error } = await supabase
@@ -145,18 +158,20 @@ const Feed = () => {
         .eq('id', postId);
 
       if (error) throw error;
-      showSuccess('Post excluído');
-      fetchPosts();
+      showSuccess('Post removido com sucesso.');
+      setPosts(current => current.filter(p => p.id !== postId));
     } catch (error: any) {
-      showError('Erro ao excluir post');
+      console.error('[Feed] Erro ao excluir post:', error);
+      showError('Você não tem permissão para excluir este post.');
     }
   };
 
-  if (loading || authLoading) {
+  if (authLoading || (loading && posts.length === 0)) {
     return (
       <Layout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="text-muted-foreground animate-pulse">Carregando seu feed...</p>
         </div>
       </Layout>
     );
@@ -165,31 +180,34 @@ const Feed = () => {
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
-        <Card className="border-none shadow-sm overflow-hidden">
+        <Card className="border-none shadow-sm overflow-hidden bg-white dark:bg-slate-900">
           <CardContent className="p-6">
             <div className="flex gap-4">
-              <Avatar className="h-10 w-10">
+              <Avatar className="h-10 w-10 border">
                 <AvatarImage src={userProfile?.avatar_url} />
-                <AvatarFallback>{userProfile?.name?.charAt(0) || 'U'}</AvatarFallback>
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                  {userProfile?.name?.charAt(0) || 'U'}
+                </AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-4">
                 <Textarea
-                  placeholder={`O que você está pensando, ${userProfile?.name?.split(' ')[0] || 'usuário'}?`}
+                  placeholder={`No que você está pensando, ${userProfile?.name?.split(' ')[0] || 'aluno'}?`}
                   value={newPost}
                   onChange={(e) => setNewPost(e.target.value)}
-                  className="min-h-[100px] resize-none border-none focus-visible:ring-0 bg-muted/30 rounded-xl p-4"
+                  className="min-h-[100px] resize-none border-none focus-visible:ring-0 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4"
                 />
                 <div className="flex justify-between items-center pt-2 border-t">
                   <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" className="rounded-full gap-2 text-muted-foreground">
+                    <Button variant="ghost" size="sm" className="rounded-full gap-2 text-muted-foreground hover:text-primary">
                       <ImageIcon className="h-4 w-4" /> Foto
                     </Button>
                   </div>
                   <Button 
                     onClick={createPost} 
                     disabled={!newPost.trim() || submitting}
-                    className="rounded-full px-6"
+                    className="rounded-full px-6 font-semibold"
                   >
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                     {submitting ? 'Publicando...' : 'Publicar'}
                   </Button>
                 </div>
@@ -200,23 +218,40 @@ const Feed = () => {
 
         <div className="space-y-4">
           {posts.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground bg-white dark:bg-slate-900 rounded-xl border border-dashed">
-              Nenhum post encontrado. Comece a conversa!
-            </div>
+            <Card className="border-none shadow-sm">
+              <CardContent className="py-16 text-center space-y-2">
+                <div className="bg-slate-100 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <MessageSquare className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <h3 className="font-bold text-lg">O feed está vazio</h3>
+                <p className="text-muted-foreground">Seja o primeiro a compartilhar algo com a turma!</p>
+              </CardContent>
+            </Card>
           ) : (
             posts.map(post => (
-              <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300">
+              <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 border-2 border-primary/10">
+                      <Avatar className="h-10 w-10 border">
                         <AvatarImage src={post.users?.avatar_url} />
-                        <AvatarFallback>{post.users?.name?.charAt(0) || 'U'}</AvatarFallback>
+                        <AvatarFallback className="bg-slate-200 dark:bg-slate-700">
+                          {post.users?.name?.charAt(0) || 'U'}
+                        </AvatarFallback>
                       </Avatar>
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-bold text-sm">{post.users?.name || 'Usuário'}</p>
-                          {post.users?.role === 'teacher' && <Badge variant="secondary" className="text-[10px] h-4 px-1">Professor</Badge>}
+                          {post.users?.role === 'teacher' && (
+                            <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                              Professor
+                            </Badge>
+                          )}
+                          {post.users?.role === 'admin' && (
+                            <Badge variant="destructive" className="text-[10px] h-4 px-1">
+                              Admin
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {post.created_at ? formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: ptBR }) : 'Agora'}
@@ -224,24 +259,31 @@ const Feed = () => {
                       </div>
                     </div>
                     {(post.user_id === user?.id || userProfile?.role === 'admin') && (
-                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => deletePost(post.id)}>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="text-muted-foreground hover:text-destructive rounded-full" 
+                        onClick={() => deletePost(post.id)}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{post.content}</p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">
+                    {post.content}
+                  </p>
                   <div className="flex items-center gap-6 pt-4 border-t">
                     <button 
                       onClick={() => toggleLike(post.id, post.has_liked)}
                       className={cn(
-                        "flex items-center gap-2 text-sm transition-colors",
+                        "flex items-center gap-2 text-sm transition-all hover:scale-110",
                         post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
                       )}
                     >
                       <Heart className={cn("h-5 w-5", post.has_liked && "fill-current")} />
-                      <span className="font-medium">{post.likes_count}</span>
+                      <span className="font-bold">{post.likes_count}</span>
                     </button>
                     <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
                       <MessageSquare className="h-5 w-5" />
