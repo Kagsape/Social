@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
+import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
@@ -22,11 +22,13 @@ const Feed = () => {
   const [newPost, setNewPost] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
 
   const fetchPosts = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      setError(null);
+      const { data, error: supabaseError } = await supabase
         .from('posts')
         .select(`
           id,
@@ -45,7 +47,7 @@ const Feed = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (supabaseError) throw supabaseError;
 
       const processedPosts = (data || []).map(post => ({
         ...post,
@@ -53,9 +55,9 @@ const Feed = () => {
         has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user?.id) : false
       }));
       setPosts(processedPosts);
-    } catch (error: any) {
-      console.error('[Feed] Erro ao buscar posts:', error);
-      showError('Não foi possível carregar os posts.');
+    } catch (err: any) {
+      console.error('[Feed] Erro ao buscar posts:', err);
+      setError('Não foi possível carregar o feed. Verifique se as tabelas foram criadas no Supabase.');
     } finally {
       setLoading(false);
     }
@@ -95,7 +97,7 @@ const Feed = () => {
       setNewPost('');
       await fetchPosts();
     } catch (error: any) {
-      showError('Erro ao publicar. Tente novamente.');
+      showError('Erro ao publicar. Verifique se a tabela "posts" existe.');
     } finally {
       setSubmitting(false);
     }
@@ -133,7 +135,6 @@ const Feed = () => {
         return p;
       }));
     } catch (error: any) {
-      console.error('[Feed] Erro ao curtir:', error);
       showError('Erro ao processar curtida.');
     }
   };
@@ -141,7 +142,7 @@ const Feed = () => {
   const handleShare = (postId: string) => {
     const url = `${window.location.origin}/feed#post-${postId}`;
     navigator.clipboard.writeText(url);
-    showSuccess('Link do post copiado para a área de transferência!');
+    showSuccess('Link do post copiado!');
   };
 
   const toggleComments = (postId: string) => {
@@ -161,14 +162,14 @@ const Feed = () => {
         .eq('id', postId);
 
       if (error) throw error;
-      showSuccess('Post removido com sucesso.');
+      showSuccess('Post removido.');
       setPosts(current => current.filter(p => p.id !== postId));
     } catch (error: any) {
       showError('Erro ao excluir post.');
     }
   };
 
-  if (authLoading || (loading && posts.length === 0)) {
+  if (authLoading || (loading && posts.length === 0 && !error)) {
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -182,6 +183,15 @@ const Feed = () => {
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
+        {error && (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="p-4 flex items-center gap-3 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <p className="text-sm font-medium">{error}</p>
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="border-none shadow-sm overflow-hidden bg-white dark:bg-slate-900">
           <CardContent className="p-6">
             <div className="flex gap-4">
@@ -219,14 +229,14 @@ const Feed = () => {
         </Card>
 
         <div className="space-y-4">
-          {posts.length === 0 ? (
+          {posts.length === 0 && !loading && !error ? (
             <Card className="border-none shadow-sm">
               <CardContent className="py-16 text-center space-y-2">
                 <div className="bg-slate-100 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                   <MessageSquare className="h-8 w-8 text-muted-foreground" />
                 </div>
                 <h3 className="font-bold text-lg">O feed está vazio</h3>
-                <p className="text-muted-foreground">Seja o primeiro a compartilhar algo com a turma!</p>
+                <p className="text-muted-foreground">Seja o primeiro a compartilhar algo!</p>
               </CardContent>
             </Card>
           ) : (
@@ -247,11 +257,6 @@ const Feed = () => {
                           {post.users?.role === 'teacher' && (
                             <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                               Professor
-                            </Badge>
-                          )}
-                          {post.users?.role === 'admin' && (
-                            <Badge variant="destructive" className="text-[10px] h-4 px-1">
-                              Admin
                             </Badge>
                           )}
                         </div>

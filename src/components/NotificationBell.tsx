@@ -22,6 +22,7 @@ const NotificationBell = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [hasTable, setHasTable] = useState(true);
 
   const fetchNotifications = async () => {
     if (!user) return;
@@ -35,10 +36,16 @@ const NotificationBell = () => {
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '42P01') { // Tabela não existe
+          setHasTable(false);
+        }
+        throw error;
+      }
 
       setNotifications(data || []);
       setUnreadCount(data?.filter(n => !n.is_read).length || 0);
+      setHasTable(true);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -80,29 +87,33 @@ const NotificationBell = () => {
   };
 
   useEffect(() => {
-    fetchNotifications();
+    if (user) {
+      fetchNotifications();
 
-    // Set up real-time subscription
-    const channel = supabase
-      .channel('notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user?.id}`
-        },
-        () => {
-          fetchNotifications();
-        }
-      )
-      .subscribe();
+      // Só tenta assinar se a tabela existir
+      if (hasTable) {
+        const channel = supabase
+          .channel('notifications')
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'notifications',
+              filter: `user_id=eq.${user?.id}`
+            },
+            () => {
+              fetchNotifications();
+            }
+          )
+          .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user]);
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      }
+    }
+  }, [user, hasTable]);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -144,7 +155,11 @@ const NotificationBell = () => {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         
-        {loading ? (
+        {!hasTable ? (
+          <div className="p-4 text-center text-xs text-muted-foreground">
+            Sistema de notificações indisponível (tabela ausente).
+          </div>
+        ) : loading ? (
           <div className="p-4 text-center text-sm text-muted-foreground">
             Carregando...
           </div>
