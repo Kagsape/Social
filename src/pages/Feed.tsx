@@ -80,12 +80,8 @@ const Feed = () => {
           table: 'posts' 
         }, (payload) => {
           if (payload.eventType === 'DELETE') {
-            // Se alguém deletou, removemos do estado local sem fazer um novo fetch
             setPosts(prev => prev.filter(p => p.id !== payload.old.id));
-          } else if (payload.eventType === 'INSERT') {
-            // Se alguém postou, buscamos a lista atualizada (silenciosamente)
-            fetchPosts(true);
-          } else if (payload.eventType === 'UPDATE') {
+          } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             fetchPosts(true);
           }
         })
@@ -118,7 +114,6 @@ const Feed = () => {
 
       showSuccess('Post publicado!');
       setNewPost('');
-      // O Realtime cuidará de atualizar a lista
     } catch (error: any) {
       showError('Erro ao publicar.');
     } finally {
@@ -152,21 +147,29 @@ const Feed = () => {
   const deletePost = async (postId: string) => {
     if (!confirm('Tem certeza que deseja excluir este post?')) return;
 
-    // Atualização otimista: removemos da tela antes mesmo do banco confirmar
+    const originalPosts = [...posts];
+    // Atualização otimista
     setPosts(prev => prev.filter(p => p.id !== postId));
 
     try {
+      // 1. Deletar curtidas associadas
+      await supabase.from('likes').delete().eq('post_id', postId);
+      
+      // 2. Deletar comentários associados
+      await supabase.from('comments').delete().eq('post_id', postId);
+
+      // 3. Deletar o post
       const { error } = await supabase
         .from('posts')
         .delete()
         .eq('id', postId);
 
       if (error) throw error;
-      showSuccess('Post removido.');
+      showSuccess('Post removido permanentemente.');
     } catch (error: any) {
-      showError('Erro ao excluir post.');
-      // Se deu erro, voltamos com o post para a lista
-      fetchPosts(true);
+      console.error('Erro ao excluir post:', error);
+      showError('Erro ao excluir post do banco de dados.');
+      setPosts(originalPosts); // Reverte se der erro
     }
   };
 
