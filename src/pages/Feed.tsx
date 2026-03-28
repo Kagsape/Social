@@ -15,6 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import CommentSection from '@/components/CommentSection';
+import { Link } from 'react-router-dom';
 
 const Feed = () => {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -26,7 +27,6 @@ const Feed = () => {
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
 
   const fetchPosts = useCallback(async () => {
-    // Se já estiver carregando, não inicia outra busca
     setLoading(true);
     setError(null);
     
@@ -50,10 +50,7 @@ const Feed = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (supabaseError) {
-        console.error('[Feed] Erro Supabase:', supabaseError);
-        throw supabaseError;
-      }
+      if (supabaseError) throw supabaseError;
 
       const processedPosts = (data || []).map(post => ({
         ...post,
@@ -64,7 +61,7 @@ const Feed = () => {
       setPosts(processedPosts);
     } catch (err: any) {
       console.error('[Feed] Erro ao buscar posts:', err);
-      setError(err.message || 'Erro ao carregar o feed. Verifique as tabelas no Supabase.');
+      setError(err.message || 'Erro ao carregar o feed.');
     } finally {
       setLoading(false);
     }
@@ -74,7 +71,6 @@ const Feed = () => {
     if (!authLoading) {
       fetchPosts();
 
-      // Inscrição em tempo real
       const channel = supabase
         .channel('feed_changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchPosts())
@@ -105,7 +101,7 @@ const Feed = () => {
       setNewPost('');
       fetchPosts();
     } catch (error: any) {
-      showError('Erro ao publicar. Verifique as permissões RLS.');
+      showError('Erro ao publicar.');
     } finally {
       setSubmitting(false);
     }
@@ -129,7 +125,6 @@ const Feed = () => {
           .from('likes')
           .insert({ post_id: postId, user_id: user.id });
       }
-      // O fetchPosts será chamado pelo canal de tempo real
     } catch (error: any) {
       showError('Erro ao processar curtida.');
     }
@@ -151,7 +146,6 @@ const Feed = () => {
     }
   };
 
-  // Se ainda estiver carregando a autenticação, mostra o loader global
   if (authLoading) {
     return (
       <Layout>
@@ -166,7 +160,6 @@ const Feed = () => {
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
-        {/* Card de Erro */}
         {error && (
           <Card className="border-destructive/50 bg-destructive/5">
             <CardContent className="p-4 flex flex-col items-center gap-3 text-destructive">
@@ -174,7 +167,6 @@ const Feed = () => {
                 <AlertCircle className="h-5 w-5" />
                 <p className="text-sm font-medium">Erro ao carregar feed</p>
               </div>
-              <p className="text-xs text-center opacity-80">{error}</p>
               <Button variant="outline" size="sm" onClick={() => fetchPosts()} className="mt-2 gap-2">
                 <RefreshCw className="h-3 w-3" /> Tentar Novamente
               </Button>
@@ -182,7 +174,6 @@ const Feed = () => {
           </Card>
         )}
 
-        {/* Criar Post */}
         <Card className="border-none shadow-sm overflow-hidden bg-white dark:bg-slate-900">
           <CardContent className="p-6">
             <div className="flex gap-4">
@@ -219,7 +210,6 @@ const Feed = () => {
           </CardContent>
         </Card>
 
-        {/* Lista de Posts */}
         <div className="space-y-4">
           {loading && posts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
@@ -234,7 +224,6 @@ const Feed = () => {
                 </div>
                 <h3 className="font-bold text-lg">O feed está vazio</h3>
                 <p className="text-muted-foreground">Seja o primeiro a compartilhar algo!</p>
-                <Button variant="link" onClick={() => fetchPosts()}>Atualizar</Button>
               </CardContent>
             </Card>
           ) : (
@@ -243,15 +232,19 @@ const Feed = () => {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 border">
-                        <AvatarImage src={post.users?.avatar_url} />
-                        <AvatarFallback className="bg-slate-200 dark:bg-slate-700">
-                          {post.users?.name?.charAt(0) || 'U'}
-                        </AvatarFallback>
-                      </Avatar>
+                      <Link to={`/profile/${post.user_id}`}>
+                        <Avatar className="h-10 w-10 border hover:opacity-80 transition-opacity">
+                          <AvatarImage src={post.users?.avatar_url} />
+                          <AvatarFallback className="bg-slate-200 dark:bg-slate-700">
+                            {post.users?.name?.charAt(0) || 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                      </Link>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-bold text-sm">{post.users?.name || 'Usuário'}</p>
+                          <Link to={`/profile/${post.user_id}`} className="font-bold text-sm hover:underline">
+                            {post.users?.name || 'Usuário'}
+                          </Link>
                           {post.users?.role === 'teacher' && (
                             <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                               Professor

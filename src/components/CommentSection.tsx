@@ -10,6 +10,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, Send, Trash2 } from 'lucide-react';
 import { showError } from '@/utils/toast';
+import { Link } from 'react-router-dom';
 
 interface CommentSectionProps {
   postId: string;
@@ -32,6 +33,7 @@ const CommentSection = ({ postId }: CommentSectionProps) => {
           created_at,
           user_id,
           users (
+            id,
             name,
             avatar_url
           )
@@ -102,13 +104,17 @@ const CommentSection = ({ postId }: CommentSectionProps) => {
         ) : (
           comments.map((comment) => (
             <div key={comment.id} className="flex gap-3 group">
-              <Avatar className="h-7 w-7">
-                <AvatarImage src={comment.users?.avatar_url} />
-                <AvatarFallback className="text-[10px]">{comment.users?.name?.charAt(0)}</AvatarFallback>
-              </Avatar>
+              <Link to={`/profile/${comment.user_id}`}>
+                <Avatar className="h-7 w-7 hover:opacity-80 transition-opacity">
+                  <AvatarImage src={comment.users?.avatar_url} />
+                  <AvatarFallback className="text-[10px]">{comment.users?.name?.charAt(0)}</AvatarFallback>
+                </Avatar>
+              </Link>
               <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-3 py-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold">{comment.users?.name}</span>
+                  <Link to={`/profile/${comment.user_id}`} className="text-xs font-bold hover:underline">
+                    {comment.users?.name}
+                  </Link>
                   <span className="text-[10px] text-muted-foreground">
                     {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true, locale: ptBR })}
                   </span>
