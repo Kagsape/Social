@@ -19,6 +19,8 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [promoting, setPromoting] = useState(false);
 
+  const isChiefAdmin = user?.email === 'xakatosh66@gmail.com';
+
   useEffect(() => {
     if (userProfile) {
       setName(userProfile.name || '');
@@ -53,7 +55,7 @@ const Profile = () => {
   };
 
   const makeMeAdmin = async () => {
-    if (!user) return;
+    if (!user || !isChiefAdmin) return;
     setPromoting(true);
     try {
       const { error } = await supabase
@@ -80,7 +82,7 @@ const Profile = () => {
             <h1 className="text-3xl font-bold">Meu Perfil</h1>
             <p className="text-muted-foreground">Gerencie suas informações e permissões.</p>
           </div>
-          {userProfile?.role !== 'admin' && (
+          {isChiefAdmin && userProfile?.role !== 'admin' && (
             <Button 
               variant="outline" 
               size="sm" 
