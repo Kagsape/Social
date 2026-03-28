@@ -32,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = async (userId: string, currentUser: User) => {
+    console.log(`[AuthProvider] Iniciando busca de perfil para: ${userId}`);
     try {
       const { data: profile, error: profileError } = await supabase
         .from('users')
@@ -39,10 +40,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .maybeSingle();
 
+      if (profileError) {
+        console.error('[AuthProvider] Erro ao buscar perfil na tabela users:', profileError);
+        throw profileError;
+      }
+
       let finalProfile = profile;
 
-      if (!finalProfile && !profileError) {
-        const { data: newProfile } = await supabase
+      if (!finalProfile) {
+        console.log('[AuthProvider] Perfil não encontrado, criando novo...');
+        const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
             id: userId,
@@ -52,18 +59,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           })
           .select('*')
           .single();
+        
+        if (insertError) {
+          console.error('[AuthProvider] Erro ao inserir novo perfil:', insertError);
+          throw insertError;
+        }
         finalProfile = newProfile;
       }
 
       if (finalProfile?.role) {
-        const { data: roleData } = await supabase
+        console.log(`[AuthProvider] Buscando permissões para o cargo: ${finalProfile.role}`);
+        const { data: roleData, error: roleError } = await supabase
           .from('roles')
           .select('permissions')
           .eq('name', finalProfile.role)
           .maybeSingle();
         
-        if (roleData) {
+        if (roleError) {
+          console.warn('[AuthProvider] Erro ao buscar permissões do cargo:', roleError);
+        } else if (roleData) {
           finalProfile.permissions = roleData.permissions;
+          console.log('[AuthProvider] Permissões carregadas com sucesso.');
         }
       }
 
@@ -71,16 +87,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         finalProfile.role = 'admin';
       }
 
-      setUserProfile(finalProfile || { 
+      console.log('[AuthProvider] Perfil final definido:', finalProfile);
+      setUserProfile(finalProfile);
+    } catch (error) {
+      console.error('[AuthProvider] Erro crítico no fetchUserProfile:', error);
+      // Fallback para não travar o app
+      setUserProfile({ 
         id: userId, 
         name: currentUser.email?.split('@')[0] || 'Usuário', 
         role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
         email: currentUser.email
       });
-    } catch (error) {
-      console.error('[Auth] Erro ao carregar perfil:', error);
     } finally {
       setLoading(false);
+      console.log('[AuthProvider] Loading finalizado.');
     }
   };
 
@@ -88,7 +108,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initializeAuth = async () => {
-      const { data: { session: initialSession } } = await supabase.auth.getSession();
+      console.log('[AuthProvider] Inicializando Auth...');
+      const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('[AuthProvider] Erro ao obter sessão inicial:', sessionError);
+      }
+
       if (!mounted) return;
 
       setSession(initialSession);
@@ -96,8 +122,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(currentUser);
 
       if (currentUser) {
+        console.log('[AuthProvider] Usuário logado encontrado:', currentUser.email);
         await fetchUserProfile(currentUser.id, currentUser);
       } else {
+        console.log('[AuthProvider] Nenhum usuário logado.');
         setLoading(false);
       }
     };
@@ -106,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        console.log(`[AuthProvider] Evento de Auth: ${event}`);
         if (!mounted) return;
 
         setSession(currentSession);
@@ -128,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signOut = async () => {
+    console.log('[AuthProvider] Fazendo logout...');
     await supabase.auth.signOut();
     window.location.href = '/login';
   };

@@ -27,7 +27,7 @@ const Feed = () => {
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
 
   const fetchPosts = useCallback(async () => {
-    // Não resetamos o loading se já tivermos posts para evitar flicker
+    console.log('[Feed] Iniciando fetchPosts...');
     if (posts.length === 0) setLoading(true);
     setError(null);
     
@@ -51,7 +51,12 @@ const Feed = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (supabaseError) throw supabaseError;
+      if (supabaseError) {
+        console.error('[Feed] Erro do Supabase ao buscar posts:', supabaseError);
+        throw supabaseError;
+      }
+
+      console.log(`[Feed] ${data?.length || 0} posts recebidos.`);
 
       const processedPosts = (data || []).map(post => ({
         ...post,
@@ -61,24 +66,35 @@ const Feed = () => {
       
       setPosts(processedPosts);
     } catch (err: any) {
-      console.error('[Feed] Erro ao buscar posts:', err);
+      console.error('[Feed] Erro capturado no fetchPosts:', err);
       setError(err.message || 'Erro ao carregar o feed.');
     } finally {
       setLoading(false);
+      console.log('[Feed] Loading finalizado.');
     }
   }, [user?.id, posts.length]);
 
   useEffect(() => {
+    console.log(`[Feed] useEffect disparado. authLoading: ${authLoading}`);
     if (!authLoading) {
       fetchPosts();
 
       const channel = supabase
         .channel('feed_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchPosts())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => fetchPosts())
-        .subscribe();
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, (payload) => {
+          console.log('[Feed] Mudança detectada na tabela posts:', payload);
+          fetchPosts();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, (payload) => {
+          console.log('[Feed] Mudança detectada na tabela likes:', payload);
+          fetchPosts();
+        })
+        .subscribe((status) => {
+          console.log(`[Feed] Status da inscrição no canal: ${status}`);
+        });
 
       return () => {
+        console.log('[Feed] Limpando canal de mudanças.');
         supabase.removeChannel(channel);
       };
     }
@@ -142,7 +158,6 @@ const Feed = () => {
 
       if (error) throw error;
       showSuccess('Post removido.');
-      // O fetchPosts será chamado automaticamente pelo canal de mudanças do Supabase
     } catch (error: any) {
       showError('Erro ao excluir post.');
     }
