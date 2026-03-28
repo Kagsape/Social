@@ -25,13 +25,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
 
   const hasPermission = (permission: string) => {
+    // Se for o administrador chefe, sempre tem permissão
+    if (user?.email === CHIEF_ADMIN_EMAIL) return true;
+    
     if (!userProfile) return false;
     
-    // Chief Admin has all permissions
-    if (userProfile.email === CHIEF_ADMIN_EMAIL) return true;
-    
-    // Check permissions from the role
-    const roleData = Array.isArray(userProfile.roles) ? userProfile.roles[0] : userProfile.roles;
+    // Verifica permissões baseadas no cargo (roles)
+    const roleData = userProfile.roles;
     const permissions = roleData?.permissions || {};
     return !!permissions[permission];
   };
@@ -71,7 +71,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (!insertError) profileData = newData;
       } else if (currentUser.email === CHIEF_ADMIN_EMAIL && profileData.role !== 'admin') {
-        // Promoção automática no banco
         const { data: updatedData } = await supabase
           .from('users')
           .update({ role: 'admin' })
@@ -82,7 +81,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (updatedData) profileData = updatedData;
       }
 
-      // Garantia final no estado do React: se for o e-mail do chefe, o cargo É admin
       if (currentUser.email === CHIEF_ADMIN_EMAIL && profileData) {
         profileData.role = 'admin';
       }
