@@ -24,9 +24,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
   
-  // Refs para controle de fluxo e evitar loops
   const initializedRef = useRef(false);
   const lastFetchedUserIdRef = useRef<string | null>(null);
+  const isFetchingProfileRef = useRef(false);
 
   const hasPermission = (permission: string) => {
     if (user?.email === CHIEF_ADMIN_EMAIL) return true;
@@ -35,11 +35,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
-    // Evita buscar o mesmo perfil repetidamente se já estiver carregado ou em processo
-    if (lastFetchedUserIdRef.current === userId && userProfile) {
+    // Se já estamos buscando ou se já buscamos este usuário, ignoramos
+    if (isFetchingProfileRef.current || (lastFetchedUserIdRef.current === userId && userProfile)) {
       return;
     }
 
+    isFetchingProfileRef.current = true;
     try {
       console.log('[Auth] fetchUserProfile iniciado para:', userId);
       lastFetchedUserIdRef.current = userId;
@@ -79,32 +80,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         finalProfile.permissions = roleData?.permissions || {};
         
-        // Garantia extra para o admin chefe
         if (currentUser.email === CHIEF_ADMIN_EMAIL) {
           finalProfile.role = 'admin';
         }
         
-        console.log('[Auth] Perfil carregado com sucesso');
         setUserProfile(finalProfile);
       }
     } catch (err) {
       console.error('[Auth] Erro ao carregar perfil:', err);
-      lastFetchedUserIdRef.current = null; // Permite tentar novamente em caso de erro
+      lastFetchedUserIdRef.current = null;
+    } finally {
+      isFetchingProfileRef.current = false;
     }
   }, [userProfile]);
 
   useEffect(() => {
-    // Garante que a subscrição e inicialização ocorram apenas uma vez por montagem do Provider
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    console.log('[Auth] Inicializando AuthProvider...');
-
     const initialize = async () => {
       try {
+        // Chamada única ao getSession
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (initialSession) {
-          console.log('[Auth] Sessão inicial detectada');
           setSession(initialSession);
           setUser(initialSession.user);
           await fetchUserProfile(initialSession.user.id, initialSession.user);
@@ -120,14 +118,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log('[Auth] onAuthStateChange disparado:', event);
-
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           const currentUser = currentSession?.user ?? null;
           setSession(currentSession);
           setUser(currentUser);
           
-          if (currentUser) {
+          if (currentUser && lastFetchedUserIdRef.current !== currentUser.id) {
             await fetchUserProfile(currentUser.id, currentUser);
           }
           setLoading(false);
@@ -147,16 +143,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchUserProfile]);
 
   const signOut = async () => {
-    console.log('[Auth] Executando signOut manual');
     setLoading(true);
     await supabase.auth.signOut();
-    // O onAuthStateChange cuidará de limpar o estado
   };
 
   const refreshProfile = async () => {
     if (user) {
-      console.log('[Auth] refreshProfile manual solicitado');
-      lastFetchedUserIdRef.current = null; // Força a busca novamente
+      lastFetchedUserIdRef.current = null;
       await fetchUserProfile(user.id, user);
     }
   };
