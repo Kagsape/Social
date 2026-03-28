@@ -22,11 +22,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
+
   const hasPermission = (permission: string) => {
     if (!userProfile) return false;
     
     // Chief Admin has all permissions
-    if (userProfile.email === 'xakatosh66@gmail.com') return true;
+    if (userProfile.email === CHIEF_ADMIN_EMAIL) return true;
     
     // Check permissions from the role
     const roleData = Array.isArray(userProfile.roles) ? userProfile.roles[0] : userProfile.roles;
@@ -35,9 +37,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = async (userId: string, currentUser: User) => {
-    const startTime = performance.now();
-    console.log(`[Auth] Iniciando busca de perfil para: ${userId}`);
-    
     try {
       const { data, error } = await supabase
         .from('users')
@@ -45,63 +44,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .maybeSingle();
 
-      const duration = (performance.now() - startTime).toFixed(2);
-      
       if (error) {
-        console.error(`[Auth] Erro na consulta da tabela 'users' (${duration}ms):`, error);
+        console.error(`[Auth] Erro na consulta:`, error);
         setUserProfile({ id: userId, name: currentUser.email?.split('@')[0], role: 'student' });
         return;
       }
 
-      if (!data) {
-        console.log(`[Auth] Perfil não encontrado após ${duration}ms. Tentando criar...`);
+      let profileData = data;
+
+      if (!profileData) {
         const { data: newData, error: insertError } = await supabase
           .from('users')
           .insert({
             id: userId,
             name: currentUser.user_metadata?.name || currentUser.email?.split('@')[0] || 'Usuário',
             email: currentUser.email,
-            role: currentUser.user_metadata?.role || 'student'
+            role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : (currentUser.user_metadata?.role || 'student')
           })
           .select('*, roles(permissions)')
           .single();
 
-        if (insertError) {
-          console.error('[Auth] Erro ao inserir novo perfil:', insertError);
-          setUserProfile({ id: userId, name: currentUser.email?.split('@')[0], role: 'student' });
-        } else {
-          console.log('[Auth] Novo perfil criado com sucesso.');
-          setUserProfile(newData);
-        }
-      } else {
-        console.log(`[Auth] Perfil carregado com sucesso em ${duration}ms.`);
-        setUserProfile(data);
+        if (!insertError) profileData = newData;
+      } else if (currentUser.email === CHIEF_ADMIN_EMAIL && profileData.role !== 'admin') {
+        // Promoção automática para o Chief Admin se ele ainda não for admin
+        const { data: updatedData, error: updateError } = await supabase
+          .from('users')
+          .update({ role: 'admin' })
+          .eq('id', userId)
+          .select('*, roles(permissions)')
+          .single();
+        
+        if (!updateError) profileData = updatedData;
       }
+
+      setUserProfile(profileData || { id: userId, name: 'Usuário', role: 'student' });
     } catch (error) {
-      console.error('[Auth] Exceção inesperada em fetchUserProfile:', error);
+      console.error('[Auth] Erro inesperado:', error);
       setUserProfile({ id: userId, name: 'Usuário', role: 'student' });
     }
   };
 
   useEffect(() => {
     let mounted = true;
-    const initStartTime = performance.now();
 
     const initializeAuth = async () => {
-      console.log('[Auth] Inicializando getSession...');
       try {
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        
-        const duration = (performance.now() - initStartTime).toFixed(2);
-        
-        if (error) {
-          console.error(`[Auth] Erro em getSession (${duration}ms):`, error);
-          if (mounted) setLoading(false);
-          return;
-        }
-
-        console.log(`[Auth] getSession concluído em ${duration}ms. Sessão ativa:`, !!initialSession);
-        
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (!mounted) return;
 
         setSession(initialSession);
@@ -113,7 +101,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fetchUserProfile(currentUser.id, currentUser);
         }
       } catch (error) {
-        console.error('[Auth] Exceção em initializeAuth:', error);
         if (mounted) setLoading(false);
       }
     };
@@ -122,7 +109,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log(`[Auth] Evento onAuthStateChange: ${event}`);
         if (!mounted) return;
 
         setSession(currentSession);
@@ -146,7 +132,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signOut = async () => {
-    console.log('[Auth] Executando signOut...');
     await supabase.auth.signOut();
     window.location.href = '/login';
   };

@@ -10,16 +10,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
-import { User, Camera, Save, LogOut, ShieldCheck } from 'lucide-react';
+import { User, Camera, Save, LogOut } from 'lucide-react';
 
 const Profile = () => {
   const { user, userProfile, refreshProfile, signOut } = useAuth();
   const [name, setName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [loading, setLoading] = useState(false);
-  const [promoting, setPromoting] = useState(false);
-
-  const isChiefAdmin = user?.email === 'xakatosh66@gmail.com';
 
   useEffect(() => {
     if (userProfile) {
@@ -54,46 +51,12 @@ const Profile = () => {
     }
   };
 
-  const makeMeAdmin = async () => {
-    if (!user || !isChiefAdmin) return;
-    setPromoting(true);
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ role: 'admin' })
-        .eq('id', user.id);
-
-      if (error) throw error;
-
-      await refreshProfile();
-      showSuccess('Agora você é um Administrador!');
-    } catch (error: any) {
-      showError('Erro ao promover cargo.');
-    } finally {
-      setPromoting(false);
-    }
-  };
-
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-8">
-        <div className="flex justify-between items-end">
-          <div>
-            <h1 className="text-3xl font-bold">Meu Perfil</h1>
-            <p className="text-muted-foreground">Gerencie suas informações e permissões.</p>
-          </div>
-          {isChiefAdmin && userProfile?.role !== 'admin' && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-2 border-primary text-primary hover:bg-primary/10"
-              onClick={makeMeAdmin}
-              disabled={promoting}
-            >
-              <ShieldCheck className="h-4 w-4" />
-              {promoting ? 'Promovendo...' : 'Tornar-me Admin'}
-            </Button>
-          )}
+        <div>
+          <h1 className="text-3xl font-bold">Meu Perfil</h1>
+          <p className="text-muted-foreground">Gerencie suas informações e permissões.</p>
         </div>
 
         <Card className="border-none shadow-lg overflow-hidden">
