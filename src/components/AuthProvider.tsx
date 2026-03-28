@@ -24,6 +24,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
 
+  // Logs de mudança de estado
+  useEffect(() => {
+    console.log('[Auth] user mudou:', user?.id || 'null');
+  }, [user]);
+
+  useEffect(() => {
+    console.log('[Auth] loading mudou:', loading);
+  }, [loading]);
+
   const hasPermission = (permission: string) => {
     if (user?.email === CHIEF_ADMIN_EMAIL) return true;
     if (!userProfile || !userProfile.permissions) return false;
@@ -32,7 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
     try {
-      console.log('[AuthProvider] Buscando perfil:', userId);
+      console.log('[Auth] fetchUserProfile chamado para:', userId);
       
       const { data: profile, error } = await supabase
         .from('users')
@@ -45,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let finalProfile = profile;
 
       if (!profile) {
-        console.log('[AuthProvider] Criando novo perfil...');
+        console.log('[Auth] Criando novo perfil para:', userId);
         const { data: newProfile, error: createError } = await supabase
           .from('users')
           .upsert({
@@ -61,7 +70,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (finalProfile) {
-        // Carregar permissões do cargo
         const { data: roleData } = await supabase
           .from('roles')
           .select('permissions')
@@ -70,15 +78,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         finalProfile.permissions = roleData?.permissions || {};
         
-        // Garantir role admin para o email mestre
         if (currentUser.email === CHIEF_ADMIN_EMAIL) {
           finalProfile.role = 'admin';
         }
         
+        console.log('[Auth] Perfil carregado com sucesso');
         setUserProfile(finalProfile);
       }
     } catch (err) {
-      console.error('[AuthProvider] Erro ao carregar perfil:', err);
+      console.error('[Auth] Erro ao carregar perfil:', err);
     }
   }, []);
 
@@ -86,20 +94,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initializeAuth = async () => {
+      console.log('[Auth] Inicializando autenticação...');
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         
         if (!mounted) return;
 
         if (initialSession) {
+          console.log('[Auth] Sessão inicial encontrada');
           setSession(initialSession);
           setUser(initialSession.user);
           await fetchUserProfile(initialSession.user.id, initialSession.user);
+        } else {
+          console.log('[Auth] Nenhuma sessão inicial');
         }
       } catch (error) {
-        console.error('[AuthProvider] Erro na inicialização:', error);
+        console.error('[Auth] Erro na inicialização:', error);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          console.log('[Auth] Finalizando loading inicial');
+          setLoading(false);
+        }
       }
     };
 
@@ -109,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, currentSession) => {
         if (!mounted) return;
         
-        console.log('[AuthProvider] Evento Auth:', event);
+        console.log('[Auth] Evento onAuthStateChange:', event);
 
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
@@ -136,6 +151,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchUserProfile]);
 
   const signOut = async () => {
+    console.log('[Auth] Executando signOut');
     setLoading(true);
     await supabase.auth.signOut();
     setSession(null);
@@ -146,6 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshProfile = async () => {
     if (user) {
+      console.log('[Auth] refreshProfile manual chamado');
       await fetchUserProfile(user.id, user);
     }
   };

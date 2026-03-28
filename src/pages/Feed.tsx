@@ -19,6 +19,7 @@ import AnnouncementList from '@/components/AnnouncementList';
 import { Link } from 'react-router-dom';
 
 const Feed = () => {
+  console.log('[Feed] Render');
   const { user, userProfile, loading: authLoading, hasPermission } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
   const [newPost, setNewPost] = useState('');
@@ -29,6 +30,7 @@ const Feed = () => {
 
   // 1. Função de busca memorizada
   const fetchPosts = useCallback(async (isSilent = false) => {
+    console.log('[Feed] fetchPosts chamado', { isSilent, userId: user?.id });
     if (!user?.id) return;
     if (!isSilent) setLoading(true);
     setError(null);
@@ -72,33 +74,45 @@ const Feed = () => {
 
   // 2. Efeito para carga inicial de dados
   useEffect(() => {
+    console.log('[Feed] useEffect (fetch inicial) rodando', { authLoading, userId: user?.id });
     if (!authLoading && user?.id) {
       fetchPosts();
     }
   }, [authLoading, user?.id, fetchPosts]);
 
-  // 3. Efeito dedicado ao Realtime (sem depender de fetchPosts para evitar loops)
+  // 3. Efeito dedicado ao Realtime
   useEffect(() => {
+    console.log('[Feed] useEffect (realtime) rodando', { authLoading, userId: user?.id });
     if (!authLoading && user?.id) {
+      console.log('[Feed] Criando channel realtime');
       const channel = supabase
         .channel('feed_changes')
         .on('postgres_changes', { 
           event: '*', 
           schema: 'public', 
           table: 'posts' 
-        }, () => fetchPosts(true))
+        }, (payload) => {
+          console.log('[Feed] Evento realtime recebido (posts)', payload);
+          fetchPosts(true);
+        })
         .on('postgres_changes', { 
           event: '*', 
           schema: 'public', 
           table: 'likes' 
-        }, () => fetchPosts(true))
-        .subscribe();
+        }, (payload) => {
+          console.log('[Feed] Evento realtime recebido (likes)', payload);
+          fetchPosts(true);
+        })
+        .subscribe((status) => {
+          console.log('[Feed] Status do channel realtime:', status);
+        });
 
       return () => {
+        console.log('[Feed] Limpando channel realtime');
         supabase.removeChannel(channel);
       };
     }
-  }, [authLoading, user?.id]); // Removido fetchPosts das dependências
+  }, [authLoading, user?.id]);
 
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
@@ -116,7 +130,6 @@ const Feed = () => {
 
       showSuccess('Post publicado!');
       setNewPost('');
-      // O realtime cuidará da atualização, mas chamamos aqui para feedback imediato
       fetchPosts(true);
     } catch (error: any) {
       showError('Erro ao publicar.');
