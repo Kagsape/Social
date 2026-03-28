@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -21,7 +21,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [rolesTableExists, setRolesTableExists] = useState(true);
 
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
 
@@ -31,7 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return !!userProfile.permissions[permission];
   };
 
-  const fetchUserProfile = async (userId: string, currentUser: User) => {
+  const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
     try {
       // 1. Busca o perfil na tabela 'users'
       const { data: profile, error: profileError } = await supabase
@@ -61,9 +60,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         finalProfile = newProfile;
       }
 
-      // 3. Tenta buscar permissões na tabela 'roles' apenas se ela existir
+      // 3. Tenta buscar permissões na tabela 'roles'
       finalProfile.permissions = {};
-      if (finalProfile?.role && rolesTableExists) {
+      if (finalProfile?.role) {
         try {
           const { data: roleData, error: roleError } = await supabase
             .from('roles')
@@ -71,16 +70,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .eq('name', finalProfile.role)
             .maybeSingle();
           
-          if (roleError) {
-            // Se o erro for 404 ou 'PGRST116' (tabela não encontrada), marcamos que a tabela não existe
-            if (roleError.code === '42P01' || roleError.status === 404) {
-              setRolesTableExists(false);
-            }
-          } else if (roleData) {
+          if (!roleError && roleData) {
             finalProfile.permissions = roleData.permissions || {};
           }
         } catch (e) {
-          setRolesTableExists(false);
+          console.warn('Tabela de roles não acessível ou inexistente');
         }
       }
 
@@ -92,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUserProfile(finalProfile);
     } catch (error) {
       console.error('[AuthProvider] Erro ao carregar perfil:', error);
-      // Fallback seguro
+      // Fallback seguro para não travar o app
       setUserProfile({ 
         id: userId, 
         name: currentUser.email?.split('@')[0] || 'Usuário', 
@@ -103,15 +97,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
 
     const initializeAuth = async () => {
       try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+        
         if (!mounted) return;
+
+        if (error) {
+          console.error('Erro ao obter sessão:', error);
+          setLoading(false);
+          return;
+        }
 
         setSession(initialSession);
         const currentUser = initialSession?.user ?? null;
@@ -123,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
         }
       } catch (e) {
+        console.error('Erro na inicialização do Auth:', e);
         if (mounted) setLoading(false);
       }
     };
@@ -138,6 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(currentUser);
 
         if (currentUser) {
+          setLoading(true);
           await fetchUserProfile(currentUser.id, currentUser);
         } else {
           setUserProfile(null);
@@ -150,7 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [rolesTableExists]);
+  }, [fetchUserProfile]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -158,7 +161,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshProfile = async () => {
-    if (user) await fetchUserProfile(user.id, user);
+    if (user) {
+      setLoading(true);
+      await fetchUserProfile(user.id, user);
+    }
   };
 
   return (
