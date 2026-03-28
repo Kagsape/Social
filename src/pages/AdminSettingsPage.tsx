@@ -46,20 +46,22 @@ const AdminSettingsPage = () => {
         </div>
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="bg-muted/50 p-1 rounded-xl">
-            <TabsTrigger value="general" className="rounded-lg gap-2">
-              <Globe className="h-4 w-4" /> Geral
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="rounded-lg gap-2">
-              <Bell className="h-4 w-4" /> Notificações
-            </TabsTrigger>
-            <TabsTrigger value="security" className="rounded-lg gap-2">
-              <Lock className="h-4 w-4" /> Segurança
-            </TabsTrigger>
-            <TabsTrigger value="appearance" className="rounded-lg gap-2">
-              <Palette className="h-4 w-4" /> Aparência
-            </TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto pb-1 scrollbar-hide">
+            <TabsList className="bg-muted/50 p-1 rounded-xl inline-flex min-w-full md:min-w-0">
+              <TabsTrigger value="general" className="rounded-lg gap-2 whitespace-nowrap">
+                <Globe className="h-4 w-4" /> Geral
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="rounded-lg gap-2 whitespace-nowrap">
+                <Bell className="h-4 w-4" /> Notificações
+              </TabsTrigger>
+              <TabsTrigger value="security" className="rounded-lg gap-2 whitespace-nowrap">
+                <Lock className="h-4 w-4" /> Segurança
+              </TabsTrigger>
+              <TabsTrigger value="appearance" className="rounded-lg gap-2 whitespace-nowrap">
+                <Palette className="h-4 w-4" /> Aparência
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="general">
             <Card className="border-none shadow-sm">

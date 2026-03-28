@@ -61,13 +61,15 @@ const Courses = () => {
           <Input placeholder="O que você quer aprender hoje?" className="pl-10 rounded-full" />
         </div>
         
-        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+        <div className="flex items-center gap-2 w-full md:w-auto">
           <Tabs defaultValue="all" className="w-full">
-            <TabsList className="bg-muted/50 rounded-full p-1">
-              <TabsTrigger value="all" className="rounded-full px-6">Todos</TabsTrigger>
-              <TabsTrigger value="programacao" className="rounded-full px-6">Programação</TabsTrigger>
-              <TabsTrigger value="hardware" className="rounded-full px-6">Hardware</TabsTrigger>
-            </TabsList>
+            <div className="w-full overflow-x-auto pb-1 scrollbar-hide">
+              <TabsList className="bg-muted/50 rounded-full p-1 inline-flex min-w-full md:min-w-0">
+                <TabsTrigger value="all" className="rounded-full px-6 whitespace-nowrap">Todos</TabsTrigger>
+                <TabsTrigger value="programacao" className="rounded-full px-6 whitespace-nowrap">Programação</TabsTrigger>
+                <TabsTrigger value="hardware" className="rounded-full px-6 whitespace-nowrap">Hardware</TabsTrigger>
+              </TabsList>
+            </div>
           </Tabs>
           <Button variant="outline" size="icon" className="rounded-full shrink-0">
             <Filter className="h-4 w-4" />

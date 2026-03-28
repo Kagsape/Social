@@ -116,7 +116,7 @@ const TeacherDashboard = () => {
           </div>
           <div className="flex items-center gap-2">
             <select 
-              className="p-2 border rounded-lg bg-background"
+              className="p-2 border rounded-lg bg-background w-full md:w-auto"
               value={selectedCourse}
               onChange={(e) => setSelectedCourse(e.target.value)}
             >
@@ -130,17 +130,19 @@ const TeacherDashboard = () => {
         <DashboardStats stats={stats} />
 
         <Tabs defaultValue="announcements" className="space-y-6">
-          <TabsList className="bg-muted/50 p-1 rounded-xl">
-            <TabsTrigger value="announcements" className="rounded-lg gap-2">
-              <Calendar className="h-4 w-4" /> Avisos
-            </TabsTrigger>
-            <TabsTrigger value="attendance" className="rounded-lg gap-2">
-              <UserCheck className="h-4 w-4" /> Frequência
-            </TabsTrigger>
-            <TabsTrigger value="grades" className="rounded-lg gap-2">
-              <GraduationCap className="h-4 w-4" /> Notas
-            </TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto pb-1 scrollbar-hide">
+            <TabsList className="bg-muted/50 p-1 rounded-xl inline-flex min-w-full md:min-w-0">
+              <TabsTrigger value="announcements" className="rounded-lg gap-2 whitespace-nowrap">
+                <Calendar className="h-4 w-4" /> Avisos
+              </TabsTrigger>
+              <TabsTrigger value="attendance" className="rounded-lg gap-2 whitespace-nowrap">
+                <UserCheck className="h-4 w-4" /> Frequência
+              </TabsTrigger>
+              <TabsTrigger value="grades" className="rounded-lg gap-2 whitespace-nowrap">
+                <GraduationCap className="h-4 w-4" /> Notas
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="announcements">
             <AnnouncementForm courseId={selectedCourse} onAnnouncementCreated={() => {}} />
