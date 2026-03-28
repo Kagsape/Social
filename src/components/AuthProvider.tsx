@@ -31,20 +31,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
+    console.log('[AuthProvider] fetchUserProfile iniciado para:', userId);
     try {
       // 1. Busca o perfil na tabela 'users'
+      console.log('[AuthProvider] Buscando perfil na tabela users...');
       const { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('[AuthProvider] Erro ao buscar perfil:', profileError);
+        throw profileError;
+      }
 
       let finalProfile = profile;
 
       // 2. Se o perfil não existir, cria um novo
       if (!finalProfile) {
+        console.log('[AuthProvider] Perfil não encontrado, criando novo perfil...');
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -56,13 +62,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select('*')
           .single();
         
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error('[AuthProvider] Erro ao criar perfil:', insertError);
+          throw insertError;
+        }
         finalProfile = newProfile;
+        console.log('[AuthProvider] Novo perfil criado:', finalProfile);
+      } else {
+        console.log('[AuthProvider] Perfil encontrado:', finalProfile);
       }
 
       // 3. Tenta buscar permissões na tabela 'roles'
       finalProfile.permissions = {};
       if (finalProfile?.role) {
+        console.log('[AuthProvider] Buscando permissões para o cargo:', finalProfile.role);
         try {
           const { data: roleData, error: roleError } = await supabase
             .from('roles')
@@ -70,22 +83,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .eq('name', finalProfile.role)
             .maybeSingle();
           
-          if (!roleError && roleData) {
+          if (roleError) {
+            console.warn('[AuthProvider] Erro ao buscar permissões do cargo:', roleError);
+          } else if (roleData) {
             finalProfile.permissions = roleData.permissions || {};
+            console.log('[AuthProvider] Permissões carregadas:', finalProfile.permissions);
+          } else {
+            console.log('[AuthProvider] Nenhuma permissão específica encontrada para o cargo.');
           }
         } catch (e) {
-          console.warn('Tabela de roles não acessível ou inexistente');
+          console.warn('[AuthProvider] Falha ao verificar tabela de roles:', e);
         }
       }
 
       // 4. Força o cargo de admin para o email principal
       if (currentUser.email === CHIEF_ADMIN_EMAIL) {
+        console.log('[AuthProvider] Forçando cargo de admin para o email principal');
         finalProfile = { ...finalProfile, role: 'admin' };
       }
 
       setUserProfile(finalProfile);
+      console.log('[AuthProvider] fetchUserProfile concluído com sucesso');
     } catch (error) {
-      console.error('[AuthProvider] Erro ao carregar perfil:', error);
+      console.error('[AuthProvider] fetchUserProfile falhou:', error);
       // Fallback seguro para não travar o app
       setUserProfile({ 
         id: userId, 
@@ -95,6 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         permissions: {}
       });
     } finally {
+      console.log('[AuthProvider] Definindo loading como false no fetchUserProfile');
       setLoading(false);
     }
   }, []);
@@ -103,28 +124,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initializeAuth = async () => {
+      console.log('[AuthProvider] initializeAuth iniciado');
       try {
         const { data: { session: initialSession }, error } = await supabase.auth.getSession();
         
-        if (!mounted) return;
+        if (!mounted) {
+          console.log('[AuthProvider] initializeAuth: componente desmontado, abortando');
+          return;
+        }
 
         if (error) {
-          console.error('Erro ao obter sessão:', error);
+          console.error('[AuthProvider] Erro no getSession:', error);
           setLoading(false);
           return;
         }
 
+        console.log('[AuthProvider] Sessão encontrada:', !!initialSession);
         setSession(initialSession);
         const currentUser = initialSession?.user ?? null;
         setUser(currentUser);
 
         if (currentUser) {
+          console.log('[AuthProvider] Usuário logado, buscando perfil...');
           await fetchUserProfile(currentUser.id, currentUser);
         } else {
+          console.log('[AuthProvider] Nenhum usuário logado, definindo loading como false');
           setLoading(false);
         }
       } catch (e) {
-        console.error('Erro na inicialização do Auth:', e);
+        console.error('[AuthProvider] Exceção no initializeAuth:', e);
         if (mounted) setLoading(false);
       }
     };
@@ -133,6 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        console.log('[AuthProvider] Evento onAuthStateChange:', event);
         if (!mounted) return;
 
         setSession(currentSession);
@@ -140,9 +169,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(currentUser);
 
         if (currentUser) {
+          console.log('[AuthProvider] Usuário detectado na mudança de estado, buscando perfil...');
           setLoading(true);
           await fetchUserProfile(currentUser.id, currentUser);
         } else {
+          console.log('[AuthProvider] Usuário deslogado na mudança de estado');
           setUserProfile(null);
           setLoading(false);
         }
