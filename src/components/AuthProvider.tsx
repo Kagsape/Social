@@ -48,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserProfile(data);
       }
     } catch (error) {
-      console.error('Erro ao buscar perfil:', error);
+      console.warn('Erro ao buscar perfil, usando dados básicos:', error);
       setUserProfile({
         id: userId,
         name: currentUser.user_metadata?.name || 'Usuário',
@@ -62,30 +62,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Recupera a sessão inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) fetchUserProfile(session.user.id, session.user);
-      setLoading(false);
-    });
+    let mounted = true;
 
-    // Escuta mudanças na autenticação
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+
+        setSession(initialSession);
+        const currentUser = initialSession?.user ?? null;
+        setUser(currentUser);
+
+        if (currentUser) {
+          await fetchUserProfile(currentUser.id, currentUser);
+        }
+      } catch (error) {
+        console.error('Erro na inicialização da auth:', error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        if (!mounted) return;
+
         setSession(currentSession);
         const currentUser = currentSession?.user ?? null;
         setUser(currentUser);
+
         if (currentUser) {
           await fetchUserProfile(currentUser.id, currentUser);
         } else {
           setUserProfile(null);
         }
+        
         setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
