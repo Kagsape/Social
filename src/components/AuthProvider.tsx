@@ -35,86 +35,88 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isFetchingProfile.current) return;
     isFetchingProfile.current = true;
     
-    console.log('[AuthProvider] Buscando perfil para:', userId);
+    console.log('[AuthProvider] Iniciando busca de perfil para:', userId);
     
+    // TIMEOUT DE SEGURANÇA: Se em 3 segundos o banco não responder, libera o app
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        console.warn('[AuthProvider] O banco de dados demorou demais. Liberando acesso de emergência.');
+        setUserProfile({
+          id: userId,
+          name: currentUser.email?.split('@')[0] || 'Usuário',
+          role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
+          email: currentUser.email,
+          permissions: {}
+        });
+        setLoading(false);
+      }
+    }, 3000);
+
     try {
-      // 1. Tenta buscar o perfil
+      // Tenta buscar o perfil com um limite de tempo implícito
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', userId);
+        .eq('id', userId)
+        .maybeSingle();
 
-      let profile = data && data.length > 0 ? data[0] : null;
+      if (error) throw error;
 
-      // 2. Se não existir ou der erro de permissão, tenta criar/garantir que existe
+      let profile = data;
+
       if (!profile) {
-        console.log('[AuthProvider] Perfil não encontrado ou erro de acesso. Tentando criar/recuperar...');
-        
-        const defaultRole = currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student';
-        
-        const { data: newProfile, error: upsertError } = await supabase
+        console.log('[AuthProvider] Perfil não existe. Criando...');
+        const { data: newProfile, error: createError } = await supabase
           .from('users')
           .upsert({
             id: userId,
             name: currentUser.user_metadata?.name || currentUser.email?.split('@')[0] || 'Usuário',
             email: currentUser.email,
-            role: defaultRole,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'id' })
+            role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student'
+          })
           .select('*')
           .single();
         
-        if (upsertError) {
-          console.error('[AuthProvider] Erro ao fazer upsert do perfil:', upsertError);
-          // Se falhar o banco, usamos um perfil em memória para não travar
-          profile = {
-            id: userId,
-            name: currentUser.email?.split('@')[0] || 'Usuário',
-            role: defaultRole,
-            email: currentUser.email,
-            permissions: {}
-          };
-        } else {
-          profile = newProfile;
-        }
+        if (!createError) profile = newProfile;
       }
 
-      // 3. Carregar permissões do cargo
-      if (profile && profile.role) {
+      // Carregar permissões
+      if (profile) {
         profile.permissions = {};
-        try {
-          const { data: roleData } = await supabase
-            .from('roles')
-            .select('permissions')
-            .eq('name', profile.role)
-            .maybeSingle();
-          
-          if (roleData) profile.permissions = roleData.permissions || {};
-        } catch (e) {
-          console.warn('[AuthProvider] Erro ao carregar permissões do cargo:', e);
+        const { data: roleData } = await supabase
+          .from('roles')
+          .select('permissions')
+          .eq('name', profile.role)
+          .maybeSingle();
+        
+        if (roleData) profile.permissions = roleData.permissions || {};
+        
+        if (currentUser.email === CHIEF_ADMIN_EMAIL) {
+          profile.role = 'admin';
         }
+        
+        setUserProfile(profile);
       }
-
-      // 4. Garantia final para o Admin Principal
-      if (currentUser.email === CHIEF_ADMIN_EMAIL) {
-        profile = { ...profile, role: 'admin' };
-      }
-
-      setUserProfile(profile);
-      console.log('[AuthProvider] Perfil final definido:', profile);
-    } catch (error) {
-      console.error('[AuthProvider] Erro geral no fetchUserProfile:', error);
+    } catch (err) {
+      console.error('[AuthProvider] Erro ao carregar perfil, usando dados locais:', err);
+      setUserProfile({
+        id: userId,
+        name: currentUser.email?.split('@')[0] || 'Usuário',
+        role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
+        email: currentUser.email,
+        permissions: {}
+      });
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
       isFetchingProfile.current = false;
     }
-  }, []);
+  }, [loading]);
 
   useEffect(() => {
     let mounted = true;
 
     const init = async () => {
-      console.log('[AuthProvider] Inicializando...');
       const { data: { session: initialSession } } = await supabase.auth.getSession();
       if (!mounted) return;
 
@@ -132,8 +134,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         if (!mounted) return;
-        
-        console.log('[AuthProvider] Mudança de estado:', event);
         
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
