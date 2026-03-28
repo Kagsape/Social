@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
@@ -26,8 +26,11 @@ const Feed = () => {
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
 
   const fetchPosts = useCallback(async () => {
+    // Se já estiver carregando, não inicia outra busca
+    setLoading(true);
+    setError(null);
+    
     try {
-      setError(null);
       const { data, error: supabaseError } = await supabase
         .from('posts')
         .select(`
@@ -47,17 +50,21 @@ const Feed = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (supabaseError) throw supabaseError;
+      if (supabaseError) {
+        console.error('[Feed] Erro Supabase:', supabaseError);
+        throw supabaseError;
+      }
 
       const processedPosts = (data || []).map(post => ({
         ...post,
         likes_count: Array.isArray(post.likes) ? post.likes.length : 0,
         has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user?.id) : false
       }));
+      
       setPosts(processedPosts);
     } catch (err: any) {
       console.error('[Feed] Erro ao buscar posts:', err);
-      setError('Não foi possível carregar o feed. Verifique se as tabelas foram criadas no Supabase.');
+      setError(err.message || 'Erro ao carregar o feed. Verifique as tabelas no Supabase.');
     } finally {
       setLoading(false);
     }
@@ -67,6 +74,7 @@ const Feed = () => {
     if (!authLoading) {
       fetchPosts();
 
+      // Inscrição em tempo real
       const channel = supabase
         .channel('feed_changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchPosts())
@@ -95,9 +103,9 @@ const Feed = () => {
 
       showSuccess('Post publicado!');
       setNewPost('');
-      await fetchPosts();
+      fetchPosts();
     } catch (error: any) {
-      showError('Erro ao publicar. Verifique se a tabela "posts" existe.');
+      showError('Erro ao publicar. Verifique as permissões RLS.');
     } finally {
       setSubmitting(false);
     }
@@ -111,45 +119,20 @@ const Feed = () => {
 
     try {
       if (hasLiked) {
-        const { error } = await supabase
+        await supabase
           .from('likes')
           .delete()
           .eq('post_id', postId)
           .eq('user_id', user.id);
-        if (error) throw error;
       } else {
-        const { error } = await supabase
+        await supabase
           .from('likes')
           .insert({ post_id: postId, user_id: user.id });
-        if (error) throw error;
       }
-      
-      setPosts(current => current.map(p => {
-        if (p.id === postId) {
-          return {
-            ...p,
-            has_liked: !hasLiked,
-            likes_count: hasLiked ? p.likes_count - 1 : p.likes_count + 1
-          };
-        }
-        return p;
-      }));
+      // O fetchPosts será chamado pelo canal de tempo real
     } catch (error: any) {
       showError('Erro ao processar curtida.');
     }
-  };
-
-  const handleShare = (postId: string) => {
-    const url = `${window.location.origin}/feed#post-${postId}`;
-    navigator.clipboard.writeText(url);
-    showSuccess('Link do post copiado!');
-  };
-
-  const toggleComments = (postId: string) => {
-    setActiveComments(prev => ({
-      ...prev,
-      [postId]: !prev[postId]
-    }));
   };
 
   const deletePost = async (postId: string) => {
@@ -163,18 +146,18 @@ const Feed = () => {
 
       if (error) throw error;
       showSuccess('Post removido.');
-      setPosts(current => current.filter(p => p.id !== postId));
     } catch (error: any) {
       showError('Erro ao excluir post.');
     }
   };
 
-  if (authLoading || (loading && posts.length === 0 && !error)) {
+  // Se ainda estiver carregando a autenticação, mostra o loader global
+  if (authLoading) {
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-muted-foreground animate-pulse">Carregando seu feed...</p>
+          <p className="text-muted-foreground animate-pulse">Autenticando...</p>
         </div>
       </Layout>
     );
@@ -183,15 +166,23 @@ const Feed = () => {
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
+        {/* Card de Erro */}
         {error && (
           <Card className="border-destructive/50 bg-destructive/5">
-            <CardContent className="p-4 flex items-center gap-3 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              <p className="text-sm font-medium">{error}</p>
+            <CardContent className="p-4 flex flex-col items-center gap-3 text-destructive">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                <p className="text-sm font-medium">Erro ao carregar feed</p>
+              </div>
+              <p className="text-xs text-center opacity-80">{error}</p>
+              <Button variant="outline" size="sm" onClick={() => fetchPosts()} className="mt-2 gap-2">
+                <RefreshCw className="h-3 w-3" /> Tentar Novamente
+              </Button>
             </CardContent>
           </Card>
         )}
 
+        {/* Criar Post */}
         <Card className="border-none shadow-sm overflow-hidden bg-white dark:bg-slate-900">
           <CardContent className="p-6">
             <div className="flex gap-4">
@@ -228,8 +219,14 @@ const Feed = () => {
           </CardContent>
         </Card>
 
+        {/* Lista de Posts */}
         <div className="space-y-4">
-          {posts.length === 0 && !loading && !error ? (
+          {loading && posts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary/50" />
+              <p className="text-sm text-muted-foreground">Buscando posts...</p>
+            </div>
+          ) : posts.length === 0 ? (
             <Card className="border-none shadow-sm">
               <CardContent className="py-16 text-center space-y-2">
                 <div className="bg-slate-100 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -237,11 +234,12 @@ const Feed = () => {
                 </div>
                 <h3 className="font-bold text-lg">O feed está vazio</h3>
                 <p className="text-muted-foreground">Seja o primeiro a compartilhar algo!</p>
+                <Button variant="link" onClick={() => fetchPosts()}>Atualizar</Button>
               </CardContent>
             </Card>
           ) : (
             posts.map(post => (
-              <Card key={post.id} id={`post-${post.id}`} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900">
+              <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -293,7 +291,7 @@ const Feed = () => {
                       <span className="font-bold">{post.likes_count}</span>
                     </button>
                     <button 
-                      onClick={() => toggleComments(post.id)}
+                      onClick={() => setActiveComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))}
                       className={cn(
                         "flex items-center gap-2 text-sm transition-colors",
                         activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary"
@@ -303,7 +301,10 @@ const Feed = () => {
                       <span className="font-medium">Comentar</span>
                     </button>
                     <button 
-                      onClick={() => handleShare(post.id)}
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/feed#post-${post.id}`);
+                        showSuccess('Link copiado!');
+                      }}
                       className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
                     >
                       <Share2 className="h-5 w-5" />
