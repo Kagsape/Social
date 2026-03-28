@@ -34,7 +34,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (!data) {
-        // Tenta criar o perfil se não existir
         const { data: newData, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -47,7 +46,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .single();
 
         if (insertError) {
-          // Se der erro 409 (Conflict/23505), tenta buscar novamente
           if (insertError.code === '23505' || insertError.code === '409') {
             const { data: retryData } = await supabase.from('users').select('*').eq('id', userId).single();
             if (retryData) setUserProfile(retryData);
@@ -62,9 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.warn('Auth: Usando perfil básico devido a erro:', error);
-    } finally {
-      // Garante que o perfil não fique nulo se o usuário estiver logado
-      setUserProfile(prev => prev || {
+      setUserProfile({
         id: userId,
         name: currentUser.user_metadata?.name || 'Usuário',
         role: 'student'
@@ -75,18 +71,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    // TIMER DE SEGURANÇA: Força o fim do loading após 3.5 segundos
+    // Aumentado para 10 segundos para dar mais tempo ao Supabase em conexões lentas
     const safetyTimer = setTimeout(() => {
       if (mounted && loading) {
-        console.warn('Auth: Tempo limite atingido. Forçando carregamento...');
+        console.warn('Auth: Tempo limite de 10s atingido. Forçando carregamento...');
         setLoading(false);
       }
-    }, 3500);
+    }, 10000);
 
     const initializeAuth = async () => {
       try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
         
+        if (error) throw error;
         if (!mounted) return;
 
         setSession(initialSession);
@@ -123,6 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
         setLoading(false);
+        clearTimeout(safetyTimer);
       }
     );
 
