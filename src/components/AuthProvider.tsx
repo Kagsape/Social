@@ -25,35 +25,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
 
   const hasPermission = (permission: string) => {
-    // Administrador Chefe sempre tem todas as permissões
     if (user?.email === CHIEF_ADMIN_EMAIL) return true;
-    if (!userProfile) return false;
-    const permissions = userProfile.permissions || {};
-    return !!permissions[permission];
+    if (!userProfile || !userProfile.permissions) return false;
+    return !!userProfile.permissions[permission];
   };
 
   const fetchUserProfile = async (userId: string, currentUser: User) => {
     console.log(`[AuthProvider] Buscando perfil para: ${userId}`);
     
-    // Aumentei o timeout para 5 segundos para conexões lentas
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Database timeout')), 5000)
-    );
-
     try {
-      // Tenta buscar o usuário com timeout
-      const { data: profile, error: profileError } = await Promise.race([
-        supabase.from('users').select('*').eq('id', userId).maybeSingle(),
-        timeoutPromise
-      ]) as any;
+      // Busca o perfil na tabela 'users'
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
       if (profileError) throw profileError;
 
       let finalProfile = profile;
 
-      // Se não existir, cria o perfil
+      // Se o perfil não existir, cria um novo
       if (!finalProfile) {
-        console.log('[AuthProvider] Criando novo perfil...');
+        console.log('[AuthProvider] Perfil não encontrado, criando novo...');
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -69,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         finalProfile = newProfile;
       }
 
-      // Busca permissões apenas se a tabela roles existir (evita o erro 404 travar o app)
+      // Tenta buscar permissões na tabela 'roles', mas não trava se falhar (ex: tabela não existe)
       if (finalProfile?.role) {
         try {
           const { data: roleData, error: roleError } = await supabase
@@ -80,27 +74,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           if (!roleError && roleData) {
             finalProfile.permissions = roleData.permissions;
+          } else {
+            finalProfile.permissions = {};
           }
         } catch (e) {
-          console.warn('[AuthProvider] Tabela de cargos não encontrada ou inacessível.');
+          console.warn('[AuthProvider] Tabela de cargos não encontrada ou erro ao acessar.');
+          finalProfile.permissions = {};
         }
       }
 
-      // Força o cargo de admin para o email principal
+      // Força o cargo de admin para o email principal, independente do banco
       if (currentUser.email === CHIEF_ADMIN_EMAIL) {
         finalProfile = { ...finalProfile, role: 'admin' };
       }
 
       setUserProfile(finalProfile);
     } catch (error) {
-      console.error('[AuthProvider] Erro ao carregar perfil:', error);
-      // Fallback para permitir navegação
+      console.error('[AuthProvider] Erro crítico ao carregar perfil:', error);
+      // Fallback para não travar o usuário
       setUserProfile({ 
         id: userId, 
         name: currentUser.email?.split('@')[0] || 'Usuário', 
         role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
         email: currentUser.email,
-permissions: {}
+        permissions: {}
       });
     } finally {
       setLoading(false);
