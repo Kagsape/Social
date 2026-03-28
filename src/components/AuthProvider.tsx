@@ -34,13 +34,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserProfile = async (userId: string, currentUser: User) => {
     console.log(`[AuthProvider] 1. Iniciando fetchUserProfile para: ${userId}`);
     
+    // Timeout de segurança de 3 segundos
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database timeout')), 3000)
+    );
+
     try {
       console.log(`[AuthProvider] 2. Executando select na tabela 'users'...`);
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      
+      // Corrida entre a consulta e o timeout
+      const { data: profile, error: profileError } = await Promise.race([
+        supabase.from('users').select('*').eq('id', userId).maybeSingle(),
+        timeoutPromise
+      ]) as any;
 
       if (profileError) {
         console.error('[AuthProvider] 2.1 Erro na consulta select:', profileError);
@@ -63,27 +69,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select('*')
           .single();
         
-        if (insertError) {
-          console.error('[AuthProvider] 4.1 Erro ao inserir perfil:', insertError);
-          throw insertError;
-        }
-        console.log('[AuthProvider] 4.2 Perfil criado com sucesso.');
+        if (insertError) throw insertError;
         finalProfile = newProfile;
       }
 
       if (finalProfile?.role) {
-        console.log(`[AuthProvider] 5. Buscando permissões para o cargo: ${finalProfile.role}`);
-        const { data: roleData, error: roleError } = await supabase
+        const { data: roleData } = await supabase
           .from('roles')
           .select('permissions')
           .eq('name', finalProfile.role)
           .maybeSingle();
         
-        if (roleError) {
-          console.warn('[AuthProvider] 5.1 Erro ao buscar permissões:', roleError);
-        } else if (roleData) {
+        if (roleData) {
           finalProfile.permissions = roleData.permissions;
-          console.log('[AuthProvider] 5.2 Permissões carregadas.');
         }
       }
 
@@ -91,16 +89,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         finalProfile.role = 'admin';
       }
 
-      console.log('[AuthProvider] 6. Definindo userProfile no estado.');
       setUserProfile(finalProfile);
     } catch (error) {
-      console.error('[AuthProvider] ERRO CRÍTICO:', error);
-      // Fallback imediato para não travar o app
+      console.error('[AuthProvider] ERRO OU TIMEOUT:', error);
+      // Fallback imediato para liberar o loading
       setUserProfile({ 
         id: userId, 
         name: currentUser.email?.split('@')[0] || 'Usuário', 
         role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
-        email: currentUser.email
+        email: currentUser.email,
+        permissions: {}
       });
     } finally {
       console.log('[AuthProvider] 7. Finalizando loading.');
@@ -114,14 +112,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initializeAuth = async () => {
       console.log('[AuthProvider] 0. Inicializando Auth...');
       try {
-        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
         
-        if (sessionError) {
-          console.error('[AuthProvider] Erro ao obter sessão:', sessionError);
-          if (mounted) setLoading(false);
-          return;
-        }
-
         if (!mounted) return;
 
         setSession(initialSession);
