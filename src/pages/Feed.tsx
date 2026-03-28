@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,6 +27,8 @@ const Feed = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
+  
+  const initializedRef = useRef(false);
 
   // 1. Função de busca memorizada
   const fetchPosts = useCallback(async (isSilent = false) => {
@@ -74,8 +76,9 @@ const Feed = () => {
 
   // 2. Efeito para carga inicial de dados
   useEffect(() => {
-    console.log('[Feed] useEffect (fetch inicial) rodando', { authLoading, userId: user?.id });
-    if (!authLoading && user?.id) {
+    console.log('[Feed] useEffect (fetch inicial) rodando', { authLoading, userId: user?.id, initialized: initializedRef.current });
+    if (!authLoading && user?.id && !initializedRef.current) {
+      initializedRef.current = true;
       fetchPosts();
     }
   }, [authLoading, user?.id, fetchPosts]);
