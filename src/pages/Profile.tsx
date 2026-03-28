@@ -19,8 +19,6 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [promoting, setPromoting] = useState(false);
 
-  const MASTER_EMAIL = 'xakatosh66@gmail.com';
-
   useEffect(() => {
     if (userProfile) {
       setName(userProfile.name || '');
@@ -82,7 +80,7 @@ const Profile = () => {
             <h1 className="text-3xl font-bold">Meu Perfil</h1>
             <p className="text-muted-foreground">Gerencie suas informações e permissões.</p>
           </div>
-          {userProfile?.role !== 'admin' && user?.email === MASTER_EMAIL && (
+          {userProfile?.role !== 'admin' && (
             <Button 
               variant="outline" 
               size="sm" 
@@ -91,7 +89,7 @@ const Profile = () => {
               disabled={promoting}
             >
               <ShieldCheck className="h-4 w-4" />
-              {promoting ? 'Promovendo...' : 'Ser Administrador'}
+              {promoting ? 'Promovendo...' : 'Tornar-me Admin'}
             </Button>
           )}
         </div>
