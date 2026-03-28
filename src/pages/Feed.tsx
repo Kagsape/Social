@@ -27,7 +27,8 @@ const Feed = () => {
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
 
   const fetchPosts = useCallback(async () => {
-    setLoading(true);
+    // Não resetamos o loading se já tivermos posts para evitar flicker
+    if (posts.length === 0) setLoading(true);
     setError(null);
     
     try {
@@ -65,7 +66,7 @@ const Feed = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, posts.length]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -141,6 +142,7 @@ const Feed = () => {
 
       if (error) throw error;
       showSuccess('Post removido.');
+      // O fetchPosts será chamado automaticamente pelo canal de mudanças do Supabase
     } catch (error: any) {
       showError('Erro ao excluir post.');
     }
