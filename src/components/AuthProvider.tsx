@@ -35,14 +35,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
-    // Se já estamos buscando ou se já buscamos este usuário, ignoramos
     if (isFetchingProfileRef.current || (lastFetchedUserIdRef.current === userId && userProfile)) {
       return;
     }
 
     isFetchingProfileRef.current = true;
     try {
-      console.log('[Auth] fetchUserProfile iniciado para:', userId);
       lastFetchedUserIdRef.current = userId;
       
       const { data: profile, error } = await supabase
@@ -56,7 +54,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let finalProfile = profile;
 
       if (!profile) {
-        console.log('[Auth] Perfil não encontrado, criando novo para:', userId);
         const { data: newProfile, error: createError } = await supabase
           .from('users')
           .upsert({
@@ -100,7 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initialize = async () => {
       try {
-        // Chamada única ao getSession
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (initialSession) {
           setSession(initialSession);
