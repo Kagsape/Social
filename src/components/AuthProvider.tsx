@@ -29,9 +29,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Auth: Erro ao buscar perfil:', error);
+      }
 
       if (!data) {
+        // Tenta criar o perfil se não existir
         const { data: newData, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -43,13 +46,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select()
           .single();
 
-        if (!insertError) setUserProfile(newData);
+        if (insertError) {
+          // Se der erro 409 (Conflict/23505), tenta buscar novamente
+          if (insertError.code === '23505' || insertError.code === '409') {
+            const { data: retryData } = await supabase.from('users').select('*').eq('id', userId).single();
+            if (retryData) setUserProfile(retryData);
+          } else {
+            console.error('Auth: Erro ao inserir perfil:', insertError);
+          }
+        } else {
+          setUserProfile(newData);
+        }
       } else {
         setUserProfile(data);
       }
     } catch (error) {
-      console.warn('Erro ao buscar perfil, usando dados básicos:', error);
-      setUserProfile({
+      console.warn('Auth: Usando perfil básico devido a erro:', error);
+    } finally {
+      // Garante que o perfil não fique nulo se o usuário estiver logado
+      setUserProfile(prev => prev || {
         id: userId,
         name: currentUser.user_metadata?.name || 'Usuário',
         role: 'student'
@@ -57,12 +72,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const refreshProfile = async () => {
-    if (user) await fetchUserProfile(user.id, user);
-  };
-
   useEffect(() => {
     let mounted = true;
+
+    // TIMER DE SEGURANÇA: Força o fim do loading após 3.5 segundos
+    const safetyTimer = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Auth: Tempo limite atingido. Forçando carregamento...');
+        setLoading(false);
+      }
+    }, 3500);
 
     const initializeAuth = async () => {
       try {
@@ -78,9 +97,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await fetchUserProfile(currentUser.id, currentUser);
         }
       } catch (error) {
-        console.error('Erro na inicialização da auth:', error);
+        console.error('Auth: Erro na inicialização:', error);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          clearTimeout(safetyTimer);
+        }
       }
     };
 
@@ -106,6 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       mounted = false;
+      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
   }, []);
@@ -113,6 +136,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     await supabase.auth.signOut();
     window.location.href = '/login';
+  };
+
+  const refreshProfile = async () => {
+    if (user) await fetchUserProfile(user.id, user);
   };
 
   return (
