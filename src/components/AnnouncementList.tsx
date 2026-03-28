@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,8 @@ const AnnouncementList = () => {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('announcements')
@@ -34,25 +35,36 @@ const AnnouncementList = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchAnnouncements();
     
     const channel = supabase
       .channel('announcements_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
-        fetchAnnouncements();
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'announcements' 
+      }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setAnnouncements(prev => prev.filter(a => a.id !== payload.old.id));
+        } else {
+          fetchAnnouncements(true);
+        }
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [fetchAnnouncements]);
 
   const deleteAnnouncement = async (id: string) => {
     if (!confirm('Deseja realmente excluir este aviso?')) return;
+
+    // Atualização otimista
+    setAnnouncements(prev => prev.filter(a => a.id !== id));
 
     try {
       const { error } = await supabase
@@ -62,9 +74,9 @@ const AnnouncementList = () => {
 
       if (error) throw error;
       showSuccess('Aviso removido.');
-      setAnnouncements(prev => prev.filter(a => a.id !== id));
     } catch (error) {
       showError('Erro ao excluir aviso.');
+      fetchAnnouncements(true);
     }
   };
 

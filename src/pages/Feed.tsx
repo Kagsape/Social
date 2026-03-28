@@ -27,8 +27,8 @@ const Feed = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
 
-  const fetchPosts = useCallback(async () => {
-    if (posts.length === 0) setLoading(true);
+  const fetchPosts = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     setError(null);
     
     try {
@@ -66,7 +66,7 @@ const Feed = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, posts.length]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -74,8 +74,26 @@ const Feed = () => {
 
       const channel = supabase
         .channel('feed_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchPosts())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => fetchPosts())
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'posts' 
+        }, (payload) => {
+          if (payload.eventType === 'DELETE') {
+            // Se alguém deletou, removemos do estado local sem fazer um novo fetch
+            setPosts(prev => prev.filter(p => p.id !== payload.old.id));
+          } else if (payload.eventType === 'INSERT') {
+            // Se alguém postou, buscamos a lista atualizada (silenciosamente)
+            fetchPosts(true);
+          } else if (payload.eventType === 'UPDATE') {
+            fetchPosts(true);
+          }
+        })
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'likes' 
+        }, () => fetchPosts(true))
         .subscribe();
 
       return () => {
@@ -100,7 +118,7 @@ const Feed = () => {
 
       showSuccess('Post publicado!');
       setNewPost('');
-      fetchPosts();
+      // O Realtime cuidará de atualizar a lista
     } catch (error: any) {
       showError('Erro ao publicar.');
     } finally {
@@ -134,6 +152,9 @@ const Feed = () => {
   const deletePost = async (postId: string) => {
     if (!confirm('Tem certeza que deseja excluir este post?')) return;
 
+    // Atualização otimista: removemos da tela antes mesmo do banco confirmar
+    setPosts(prev => prev.filter(p => p.id !== postId));
+
     try {
       const { error } = await supabase
         .from('posts')
@@ -141,12 +162,11 @@ const Feed = () => {
         .eq('id', postId);
 
       if (error) throw error;
-      
       showSuccess('Post removido.');
-      // Atualização otimista da interface
-      setPosts(prev => prev.filter(p => p.id !== postId));
     } catch (error: any) {
       showError('Erro ao excluir post.');
+      // Se deu erro, voltamos com o post para a lista
+      fetchPosts(true);
     }
   };
 
@@ -164,7 +184,6 @@ const Feed = () => {
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
-        {/* Lista de Avisos (Announcements) */}
         <AnnouncementList />
 
         {error && (
