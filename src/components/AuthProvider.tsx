@@ -25,40 +25,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
 
   const hasPermission = (permission: string) => {
-    // Se for o administrador chefe, sempre tem permissão
+    // Se for o administrador chefe, sempre tem permissão total
     if (user?.email === CHIEF_ADMIN_EMAIL) return true;
     
     if (!userProfile) return false;
     
     // Verifica permissões baseadas no cargo (roles)
-    const roleData = userProfile.roles;
-    const permissions = roleData?.permissions || {};
+    const permissions = userProfile.permissions || {};
     return !!permissions[permission];
   };
 
   const fetchUserProfile = async (userId: string, currentUser: User) => {
     try {
-      const { data, error } = await supabase
+      // 1. Busca o perfil do usuário sem o join que estava falhando
+      const { data: profile, error: profileError } = await supabase
         .from('users')
-        .select('*, roles(permissions)')
+        .select('*')
         .eq('id', userId)
         .maybeSingle();
 
-      if (error) {
-        console.error(`[Auth] Erro na consulta:`, error);
-        setUserProfile({ 
-          id: userId, 
-          name: currentUser.email?.split('@')[0], 
-          role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
-          email: currentUser.email
-        });
-        return;
-      }
+      if (profileError) throw profileError;
 
-      let profileData = data;
+      let finalProfile = profile;
 
-      if (!profileData) {
-        const { data: newData, error: insertError } = await supabase
+      // 2. Se o perfil não existir, cria um novo
+      if (!finalProfile) {
+        const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
             id: userId,
@@ -66,36 +58,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: currentUser.email,
             role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : (currentUser.user_metadata?.role || 'student')
           })
-          .select('*, roles(permissions)')
+          .select('*')
           .single();
 
-        if (!insertError) profileData = newData;
-      } else if (currentUser.email === CHIEF_ADMIN_EMAIL && profileData.role !== 'admin') {
-        const { data: updatedData } = await supabase
+        if (insertError) throw insertError;
+        finalProfile = newProfile;
+      } 
+      // 3. Promoção automática para o Chief Admin se necessário
+      else if (currentUser.email === CHIEF_ADMIN_EMAIL && finalProfile.role !== 'admin') {
+        const { data: updatedProfile } = await supabase
           .from('users')
           .update({ role: 'admin' })
           .eq('id', userId)
-          .select('*, roles(permissions)')
+          .select('*')
           .single();
         
-        if (updatedData) profileData = updatedData;
+        if (updatedProfile) finalProfile = updatedProfile;
       }
 
-      if (currentUser.email === CHIEF_ADMIN_EMAIL && profileData) {
-        profileData.role = 'admin';
+      // 4. Busca as permissões do cargo separadamente para evitar erro de join
+      if (finalProfile?.role) {
+        const { data: roleData } = await supabase
+          .from('roles')
+          .select('permissions')
+          .eq('name', finalProfile.role)
+          .maybeSingle();
+        
+        if (roleData) {
+          finalProfile.permissions = roleData.permissions;
+        }
       }
 
-      setUserProfile(profileData || { 
+      // Garantia para o Chief Admin no estado local
+      if (currentUser.email === CHIEF_ADMIN_EMAIL && finalProfile) {
+        finalProfile.role = 'admin';
+      }
+
+      setUserProfile(finalProfile || { 
         id: userId, 
         name: 'Usuário', 
         role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
         email: currentUser.email
       });
     } catch (error) {
-      console.error('[Auth] Erro inesperado:', error);
+      console.error('[Auth] Erro ao carregar perfil:', error);
+      // Fallback seguro
       setUserProfile({ 
         id: userId, 
-        name: 'Usuário', 
+        name: currentUser.email?.split('@')[0] || 'Usuário', 
         role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
         email: currentUser.email
       });
@@ -113,11 +123,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(initialSession);
         const currentUser = initialSession?.user ?? null;
         setUser(currentUser);
-        setLoading(false);
 
         if (currentUser) {
-          fetchUserProfile(currentUser.id, currentUser);
+          await fetchUserProfile(currentUser.id, currentUser);
         }
+        
+        setLoading(false);
       } catch (error) {
         if (mounted) setLoading(false);
       }
@@ -134,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(currentUser);
 
         if (currentUser) {
-          fetchUserProfile(currentUser.id, currentUser);
+          await fetchUserProfile(currentUser.id, currentUser);
         } else {
           setUserProfile(null);
         }
