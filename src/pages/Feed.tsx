@@ -80,10 +80,11 @@ const Feed = () => {
     }
   }, [authLoading, user?.id, fetchPosts]);
 
-  // 3. Efeito dedicado ao Realtime
+  // 3. Efeito dedicado ao Realtime (DESATIVADO TEMPORARIAMENTE PARA DEBUG)
   useEffect(() => {
     console.log('[Feed] useEffect (realtime) rodando', { authLoading, userId: user?.id });
     if (!authLoading && user?.id) {
+      /* 
       console.log('[Feed] Criando channel realtime');
       const channel = supabase
         .channel('feed_changes')
@@ -111,6 +112,7 @@ const Feed = () => {
         console.log('[Feed] Limpando channel realtime');
         supabase.removeChannel(channel);
       };
+      */
     }
   }, [authLoading, user?.id]);
 
