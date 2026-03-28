@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -21,6 +21,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const isFetchingProfile = useRef(false);
 
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
 
@@ -31,26 +32,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
-    console.log('[AuthProvider] fetchUserProfile iniciado para:', userId);
+    if (isFetchingProfile.current) return;
+    isFetchingProfile.current = true;
+    
+    console.log('[AuthProvider] Buscando perfil para:', userId);
+    
+    // Timeout de segurança: se demorar mais de 5 segundos, libera o carregamento
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        console.warn('[AuthProvider] Timeout na busca de perfil, liberando interface');
+        setLoading(false);
+      }
+    }, 5000);
+
     try {
-      // 1. Busca o perfil na tabela 'users'
-      console.log('[AuthProvider] Buscando perfil na tabela users...');
-      const { data: profile, error: profileError } = await supabase
+      // Usando uma query mais simples (select com limit) que costuma ser mais estável
+      const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
-        .maybeSingle();
+        .limit(1);
 
-      if (profileError) {
-        console.error('[AuthProvider] Erro ao buscar perfil:', profileError);
-        throw profileError;
+      const profile = data && data.length > 0 ? data[0] : null;
+
+      if (error) {
+        console.error('[AuthProvider] Erro na query de perfil:', error);
+        throw error;
       }
 
       let finalProfile = profile;
 
-      // 2. Se o perfil não existir, cria um novo
       if (!finalProfile) {
-        console.log('[AuthProvider] Perfil não encontrado, criando novo perfil...');
+        console.log('[AuthProvider] Criando perfil inicial...');
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -62,51 +75,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select('*')
           .single();
         
-        if (insertError) {
-          console.error('[AuthProvider] Erro ao criar perfil:', insertError);
-          throw insertError;
-        }
-        finalProfile = newProfile;
-        console.log('[AuthProvider] Novo perfil criado:', finalProfile);
-      } else {
-        console.log('[AuthProvider] Perfil encontrado:', finalProfile);
+        if (!insertError) finalProfile = newProfile;
       }
 
-      // 3. Tenta buscar permissões na tabela 'roles'
-      finalProfile.permissions = {};
+      // Carregar permissões se houver cargo
       if (finalProfile?.role) {
-        console.log('[AuthProvider] Buscando permissões para o cargo:', finalProfile.role);
-        try {
-          const { data: roleData, error: roleError } = await supabase
-            .from('roles')
-            .select('permissions')
-            .eq('name', finalProfile.role)
-            .maybeSingle();
-          
-          if (roleError) {
-            console.warn('[AuthProvider] Erro ao buscar permissões do cargo:', roleError);
-          } else if (roleData) {
-            finalProfile.permissions = roleData.permissions || {};
-            console.log('[AuthProvider] Permissões carregadas:', finalProfile.permissions);
-          } else {
-            console.log('[AuthProvider] Nenhuma permissão específica encontrada para o cargo.');
-          }
-        } catch (e) {
-          console.warn('[AuthProvider] Falha ao verificar tabela de roles:', e);
-        }
+        finalProfile.permissions = {};
+        const { data: roleData } = await supabase
+          .from('roles')
+          .select('permissions')
+          .eq('name', finalProfile.role)
+          .maybeSingle();
+        
+        if (roleData) finalProfile.permissions = roleData.permissions || {};
       }
 
-      // 4. Força o cargo de admin para o email principal
       if (currentUser.email === CHIEF_ADMIN_EMAIL) {
-        console.log('[AuthProvider] Forçando cargo de admin para o email principal');
         finalProfile = { ...finalProfile, role: 'admin' };
       }
 
       setUserProfile(finalProfile);
-      console.log('[AuthProvider] fetchUserProfile concluído com sucesso');
+      console.log('[AuthProvider] Perfil carregado com sucesso');
     } catch (error) {
-      console.error('[AuthProvider] fetchUserProfile falhou:', error);
-      // Fallback seguro para não travar o app
+      console.error('[AuthProvider] Falha crítica ao carregar perfil:', error);
+      // Fallback para não travar o usuário
       setUserProfile({ 
         id: userId, 
         name: currentUser.email?.split('@')[0] || 'Usuário', 
@@ -115,65 +107,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         permissions: {}
       });
     } finally {
-      console.log('[AuthProvider] Definindo loading como false no fetchUserProfile');
+      clearTimeout(timeoutId);
       setLoading(false);
+      isFetchingProfile.current = false;
     }
-  }, []);
+  }, [loading]);
 
   useEffect(() => {
     let mounted = true;
 
-    const initializeAuth = async () => {
-      console.log('[AuthProvider] initializeAuth iniciado');
-      try {
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        
-        if (!mounted) {
-          console.log('[AuthProvider] initializeAuth: componente desmontado, abortando');
-          return;
-        }
+    // Inicialização única
+    const init = async () => {
+      const { data: { session: initialSession } } = await supabase.auth.getSession();
+      if (!mounted) return;
 
-        if (error) {
-          console.error('[AuthProvider] Erro no getSession:', error);
-          setLoading(false);
-          return;
-        }
-
-        console.log('[AuthProvider] Sessão encontrada:', !!initialSession);
+      if (initialSession) {
         setSession(initialSession);
-        const currentUser = initialSession?.user ?? null;
-        setUser(currentUser);
-
-        if (currentUser) {
-          console.log('[AuthProvider] Usuário logado, buscando perfil...');
-          await fetchUserProfile(currentUser.id, currentUser);
-        } else {
-          console.log('[AuthProvider] Nenhum usuário logado, definindo loading como false');
-          setLoading(false);
-        }
-      } catch (e) {
-        console.error('[AuthProvider] Exceção no initializeAuth:', e);
-        if (mounted) setLoading(false);
+        setUser(initialSession.user);
+        await fetchUserProfile(initialSession.user.id, initialSession.user);
+      } else {
+        setLoading(false);
       }
     };
 
-    initializeAuth();
+    init();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log('[AuthProvider] Evento onAuthStateChange:', event);
         if (!mounted) return;
-
+        
+        console.log('[AuthProvider] Auth State Change:', event);
+        
         setSession(currentSession);
         const currentUser = currentSession?.user ?? null;
         setUser(currentUser);
 
-        if (currentUser) {
-          console.log('[AuthProvider] Usuário detectado na mudança de estado, buscando perfil...');
+        if (currentUser && event !== 'INITIAL_SESSION') {
           setLoading(true);
           await fetchUserProfile(currentUser.id, currentUser);
-        } else {
-          console.log('[AuthProvider] Usuário deslogado na mudança de estado');
+        } else if (!currentUser) {
           setUserProfile(null);
           setLoading(false);
         }
