@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -23,15 +23,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
-
-  // Logs de mudança de estado
-  useEffect(() => {
-    console.log('[Auth] user mudou:', user?.id || 'null');
-  }, [user]);
-
-  useEffect(() => {
-    console.log('[Auth] loading mudou:', loading);
-  }, [loading]);
+  
+  // Refs para controle de fluxo e evitar loops
+  const initializedRef = useRef(false);
+  const lastFetchedUserIdRef = useRef<string | null>(null);
 
   const hasPermission = (permission: string) => {
     if (user?.email === CHIEF_ADMIN_EMAIL) return true;
@@ -40,8 +35,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
+    // Evita buscar o mesmo perfil repetidamente se já estiver carregado ou em processo
+    if (lastFetchedUserIdRef.current === userId && userProfile) {
+      return;
+    }
+
     try {
-      console.log('[Auth] fetchUserProfile chamado para:', userId);
+      console.log('[Auth] fetchUserProfile iniciado para:', userId);
+      lastFetchedUserIdRef.current = userId;
       
       const { data: profile, error } = await supabase
         .from('users')
@@ -54,7 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let finalProfile = profile;
 
       if (!profile) {
-        console.log('[Auth] Criando novo perfil para:', userId);
+        console.log('[Auth] Perfil não encontrado, criando novo para:', userId);
         const { data: newProfile, error: createError } = await supabase
           .from('users')
           .upsert({
@@ -78,6 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         finalProfile.permissions = roleData?.permissions || {};
         
+        // Garantia extra para o admin chefe
         if (currentUser.email === CHIEF_ADMIN_EMAIL) {
           finalProfile.role = 'admin';
         }
@@ -87,48 +89,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err) {
       console.error('[Auth] Erro ao carregar perfil:', err);
+      lastFetchedUserIdRef.current = null; // Permite tentar novamente em caso de erro
     }
-  }, []);
+  }, [userProfile]);
 
   useEffect(() => {
-    let mounted = true;
+    // Garante que a subscrição e inicialização ocorram apenas uma vez por montagem do Provider
+    if (initializedRef.current) return;
+    initializedRef.current = true;
 
-    const initializeAuth = async () => {
-      console.log('[Auth] Inicializando autenticação...');
+    console.log('[Auth] Inicializando AuthProvider...');
+
+    const initialize = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        
-        if (!mounted) return;
-
         if (initialSession) {
-          console.log('[Auth] Sessão inicial encontrada');
+          console.log('[Auth] Sessão inicial detectada');
           setSession(initialSession);
           setUser(initialSession.user);
           await fetchUserProfile(initialSession.user.id, initialSession.user);
-        } else {
-          console.log('[Auth] Nenhuma sessão inicial');
         }
       } catch (error) {
-        console.error('[Auth] Erro na inicialização:', error);
+        console.error('[Auth] Erro ao obter sessão inicial:', error);
       } finally {
-        if (mounted) {
-          console.log('[Auth] Finalizando loading inicial');
-          setLoading(false);
-        }
+        setLoading(false);
       }
     };
 
-    initializeAuth();
+    initialize();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        if (!mounted) return;
-        
-        console.log('[Auth] Evento onAuthStateChange:', event);
+        console.log('[Auth] onAuthStateChange disparado:', event);
 
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          setSession(currentSession);
           const currentUser = currentSession?.user ?? null;
+          setSession(currentSession);
           setUser(currentUser);
           
           if (currentUser) {
@@ -139,30 +135,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSession(null);
           setUser(null);
           setUserProfile(null);
+          lastFetchedUserIdRef.current = null;
           setLoading(false);
         }
       }
     );
 
     return () => {
-      mounted = false;
       subscription.unsubscribe();
     };
   }, [fetchUserProfile]);
 
   const signOut = async () => {
-    console.log('[Auth] Executando signOut');
+    console.log('[Auth] Executando signOut manual');
     setLoading(true);
     await supabase.auth.signOut();
-    setSession(null);
-    setUser(null);
-    setUserProfile(null);
-    window.location.href = '/login';
+    // O onAuthStateChange cuidará de limpar o estado
   };
 
   const refreshProfile = async () => {
     if (user) {
-      console.log('[Auth] refreshProfile manual chamado');
+      console.log('[Auth] refreshProfile manual solicitado');
+      lastFetchedUserIdRef.current = null; // Força a busca novamente
       await fetchUserProfile(user.id, user);
     }
   };
