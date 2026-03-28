@@ -37,87 +37,84 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     console.log('[AuthProvider] Buscando perfil para:', userId);
     
-    // Timeout de segurança: se demorar mais de 5 segundos, libera o carregamento
-    const timeoutId = setTimeout(() => {
-      if (loading) {
-        console.warn('[AuthProvider] Timeout na busca de perfil, liberando interface');
-        setLoading(false);
-      }
-    }, 5000);
-
     try {
-      // Usando uma query mais simples (select com limit) que costuma ser mais estável
+      // 1. Tenta buscar o perfil
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', userId)
-        .limit(1);
+        .eq('id', userId);
 
-      const profile = data && data.length > 0 ? data[0] : null;
+      let profile = data && data.length > 0 ? data[0] : null;
 
-      if (error) {
-        console.error('[AuthProvider] Erro na query de perfil:', error);
-        throw error;
-      }
-
-      let finalProfile = profile;
-
-      if (!finalProfile) {
-        console.log('[AuthProvider] Criando perfil inicial...');
-        const { data: newProfile, error: insertError } = await supabase
+      // 2. Se não existir ou der erro de permissão, tenta criar/garantir que existe
+      if (!profile) {
+        console.log('[AuthProvider] Perfil não encontrado ou erro de acesso. Tentando criar/recuperar...');
+        
+        const defaultRole = currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student';
+        
+        const { data: newProfile, error: upsertError } = await supabase
           .from('users')
-          .insert({
+          .upsert({
             id: userId,
             name: currentUser.user_metadata?.name || currentUser.email?.split('@')[0] || 'Usuário',
             email: currentUser.email,
-            role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : (currentUser.user_metadata?.role || 'student')
-          })
+            role: defaultRole,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' })
           .select('*')
           .single();
         
-        if (!insertError) finalProfile = newProfile;
+        if (upsertError) {
+          console.error('[AuthProvider] Erro ao fazer upsert do perfil:', upsertError);
+          // Se falhar o banco, usamos um perfil em memória para não travar
+          profile = {
+            id: userId,
+            name: currentUser.email?.split('@')[0] || 'Usuário',
+            role: defaultRole,
+            email: currentUser.email,
+            permissions: {}
+          };
+        } else {
+          profile = newProfile;
+        }
       }
 
-      // Carregar permissões se houver cargo
-      if (finalProfile?.role) {
-        finalProfile.permissions = {};
-        const { data: roleData } = await supabase
-          .from('roles')
-          .select('permissions')
-          .eq('name', finalProfile.role)
-          .maybeSingle();
-        
-        if (roleData) finalProfile.permissions = roleData.permissions || {};
+      // 3. Carregar permissões do cargo
+      if (profile && profile.role) {
+        profile.permissions = {};
+        try {
+          const { data: roleData } = await supabase
+            .from('roles')
+            .select('permissions')
+            .eq('name', profile.role)
+            .maybeSingle();
+          
+          if (roleData) profile.permissions = roleData.permissions || {};
+        } catch (e) {
+          console.warn('[AuthProvider] Erro ao carregar permissões do cargo:', e);
+        }
       }
 
+      // 4. Garantia final para o Admin Principal
       if (currentUser.email === CHIEF_ADMIN_EMAIL) {
-        finalProfile = { ...finalProfile, role: 'admin' };
+        profile = { ...profile, role: 'admin' };
       }
 
-      setUserProfile(finalProfile);
-      console.log('[AuthProvider] Perfil carregado com sucesso');
+      setUserProfile(profile);
+      console.log('[AuthProvider] Perfil final definido:', profile);
     } catch (error) {
-      console.error('[AuthProvider] Falha crítica ao carregar perfil:', error);
-      // Fallback para não travar o usuário
-      setUserProfile({ 
-        id: userId, 
-        name: currentUser.email?.split('@')[0] || 'Usuário', 
-        role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
-        email: currentUser.email,
-        permissions: {}
-      });
+      console.error('[AuthProvider] Erro geral no fetchUserProfile:', error);
     } finally {
-      clearTimeout(timeoutId);
       setLoading(false);
       isFetchingProfile.current = false;
     }
-  }, [loading]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
 
-    // Inicialização única
     const init = async () => {
+      console.log('[AuthProvider] Inicializando...');
       const { data: { session: initialSession } } = await supabase.auth.getSession();
       if (!mounted) return;
 
@@ -136,16 +133,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, currentSession) => {
         if (!mounted) return;
         
-        console.log('[AuthProvider] Auth State Change:', event);
+        console.log('[AuthProvider] Mudança de estado:', event);
         
-        setSession(currentSession);
-        const currentUser = currentSession?.user ?? null;
-        setUser(currentUser);
-
-        if (currentUser && event !== 'INITIAL_SESSION') {
-          setLoading(true);
-          await fetchUserProfile(currentUser.id, currentUser);
-        } else if (!currentUser) {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          setSession(currentSession);
+          const currentUser = currentSession?.user ?? null;
+          setUser(currentUser);
+          if (currentUser) {
+            setLoading(true);
+            await fetchUserProfile(currentUser.id, currentUser);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUser(null);
           setUserProfile(null);
           setLoading(false);
         }
