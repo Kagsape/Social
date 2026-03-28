@@ -28,6 +28,7 @@ const Feed = () => {
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
 
   const fetchPosts = useCallback(async (isSilent = false) => {
+    if (!user?.id) return;
     if (!isSilent) setLoading(true);
     setError(null);
     
@@ -56,7 +57,7 @@ const Feed = () => {
       const processedPosts = (data || []).map(post => ({
         ...post,
         likes_count: Array.isArray(post.likes) ? post.likes.length : 0,
-        has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user?.id) : false
+        has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user.id) : false
       }));
       
       setPosts(processedPosts);
@@ -69,7 +70,8 @@ const Feed = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!authLoading) {
+    // Só inicia a busca quando a autenticação terminar e houver um usuário
+    if (!authLoading && user?.id) {
       fetchPosts();
 
       const channel = supabase
@@ -78,13 +80,7 @@ const Feed = () => {
           event: '*', 
           schema: 'public', 
           table: 'posts' 
-        }, (payload) => {
-          if (payload.eventType === 'DELETE') {
-            setPosts(prev => prev.filter(p => p.id !== payload.old.id));
-          } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            fetchPosts(true);
-          }
-        })
+        }, () => fetchPosts(true))
         .on('postgres_changes', { 
           event: '*', 
           schema: 'public', 
@@ -96,7 +92,7 @@ const Feed = () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [authLoading, fetchPosts]);
+  }, [authLoading, user?.id, fetchPosts]);
 
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
@@ -114,6 +110,7 @@ const Feed = () => {
 
       showSuccess('Post publicado!');
       setNewPost('');
+      fetchPosts(true);
     } catch (error: any) {
       showError('Erro ao publicar.');
     } finally {
@@ -122,10 +119,7 @@ const Feed = () => {
   };
 
   const toggleLike = async (postId: string, hasLiked: boolean) => {
-    if (!user) {
-      showError('Você precisa estar logado para curtir.');
-      return;
-    }
+    if (!user) return;
 
     try {
       if (hasLiked) {
@@ -147,29 +141,17 @@ const Feed = () => {
   const deletePost = async (postId: string) => {
     if (!confirm('Tem certeza que deseja excluir este post?')) return;
 
-    const originalPosts = [...posts];
-    // Atualização otimista
-    setPosts(prev => prev.filter(p => p.id !== postId));
-
     try {
-      // 1. Deletar curtidas associadas
-      await supabase.from('likes').delete().eq('post_id', postId);
-      
-      // 2. Deletar comentários associados
-      await supabase.from('comments').delete().eq('post_id', postId);
-
-      // 3. Deletar o post
       const { error } = await supabase
         .from('posts')
         .delete()
         .eq('id', postId);
 
       if (error) throw error;
-      showSuccess('Post removido permanentemente.');
+      showSuccess('Post removido.');
+      setPosts(prev => prev.filter(p => p.id !== postId));
     } catch (error: any) {
-      console.error('Erro ao excluir post:', error);
-      showError('Erro ao excluir post do banco de dados.');
-      setPosts(originalPosts); // Reverte se der erro
+      showError('Erro ao excluir post.');
     }
   };
 
@@ -178,7 +160,7 @@ const Feed = () => {
       <Layout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-muted-foreground animate-pulse">Autenticando...</p>
+          <p className="text-muted-foreground">Carregando seu feed...</p>
         </div>
       </Layout>
     );
@@ -296,7 +278,7 @@ const Feed = () => {
                       </Button>
                     )}
                   </div>
-                </CardHeader>
+                </Header>
                 <CardContent className="space-y-4">
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">
                     {post.content}
