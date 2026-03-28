@@ -21,6 +21,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rolesTableExists, setRolesTableExists] = useState(true);
 
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
 
@@ -31,10 +32,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = async (userId: string, currentUser: User) => {
-    console.log(`[AuthProvider] Buscando perfil para: ${userId}`);
-    
     try {
-      // Busca o perfil na tabela 'users'
+      // 1. Busca o perfil na tabela 'users'
       const { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
@@ -45,9 +44,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       let finalProfile = profile;
 
-      // Se o perfil não existir, cria um novo
+      // 2. Se o perfil não existir, cria um novo
       if (!finalProfile) {
-        console.log('[AuthProvider] Perfil não encontrado, criando novo...');
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -63,8 +61,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         finalProfile = newProfile;
       }
 
-      // Tenta buscar permissões na tabela 'roles', mas não trava se falhar (ex: tabela não existe)
-      if (finalProfile?.role) {
+      // 3. Tenta buscar permissões na tabela 'roles' apenas se ela existir
+      finalProfile.permissions = {};
+      if (finalProfile?.role && rolesTableExists) {
         try {
           const { data: roleData, error: roleError } = await supabase
             .from('roles')
@@ -72,26 +71,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .eq('name', finalProfile.role)
             .maybeSingle();
           
-          if (!roleError && roleData) {
-            finalProfile.permissions = roleData.permissions;
-          } else {
-            finalProfile.permissions = {};
+          if (roleError) {
+            // Se o erro for 404 ou 'PGRST116' (tabela não encontrada), marcamos que a tabela não existe
+            if (roleError.code === '42P01' || roleError.status === 404) {
+              setRolesTableExists(false);
+            }
+          } else if (roleData) {
+            finalProfile.permissions = roleData.permissions || {};
           }
         } catch (e) {
-          console.warn('[AuthProvider] Tabela de cargos não encontrada ou erro ao acessar.');
-          finalProfile.permissions = {};
+          setRolesTableExists(false);
         }
       }
 
-      // Força o cargo de admin para o email principal, independente do banco
+      // 4. Força o cargo de admin para o email principal
       if (currentUser.email === CHIEF_ADMIN_EMAIL) {
         finalProfile = { ...finalProfile, role: 'admin' };
       }
 
       setUserProfile(finalProfile);
     } catch (error) {
-      console.error('[AuthProvider] Erro crítico ao carregar perfil:', error);
-      // Fallback para não travar o usuário
+      console.error('[AuthProvider] Erro ao carregar perfil:', error);
+      // Fallback seguro
       setUserProfile({ 
         id: userId, 
         name: currentUser.email?.split('@')[0] || 'Usuário', 
@@ -110,7 +111,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initializeAuth = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        
         if (!mounted) return;
 
         setSession(initialSession);
@@ -123,7 +123,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
         }
       } catch (e) {
-        console.error('[AuthProvider] Erro na inicialização:', e);
         if (mounted) setLoading(false);
       }
     };
@@ -151,7 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [rolesTableExists]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
