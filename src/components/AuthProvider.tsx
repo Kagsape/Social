@@ -46,7 +46,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error(`[Auth] Erro na consulta:`, error);
-        setUserProfile({ id: userId, name: currentUser.email?.split('@')[0], role: 'student' });
+        setUserProfile({ 
+          id: userId, 
+          name: currentUser.email?.split('@')[0], 
+          role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
+          email: currentUser.email
+        });
         return;
       }
 
@@ -66,21 +71,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (!insertError) profileData = newData;
       } else if (currentUser.email === CHIEF_ADMIN_EMAIL && profileData.role !== 'admin') {
-        // Promoção automática para o Chief Admin se ele ainda não for admin
-        const { data: updatedData, error: updateError } = await supabase
+        // Promoção automática no banco
+        const { data: updatedData } = await supabase
           .from('users')
           .update({ role: 'admin' })
           .eq('id', userId)
           .select('*, roles(permissions)')
           .single();
         
-        if (!updateError) profileData = updatedData;
+        if (updatedData) profileData = updatedData;
       }
 
-      setUserProfile(profileData || { id: userId, name: 'Usuário', role: 'student' });
+      // Garantia final no estado do React: se for o e-mail do chefe, o cargo É admin
+      if (currentUser.email === CHIEF_ADMIN_EMAIL && profileData) {
+        profileData.role = 'admin';
+      }
+
+      setUserProfile(profileData || { 
+        id: userId, 
+        name: 'Usuário', 
+        role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
+        email: currentUser.email
+      });
     } catch (error) {
       console.error('[Auth] Erro inesperado:', error);
-      setUserProfile({ id: userId, name: 'Usuário', role: 'student' });
+      setUserProfile({ 
+        id: userId, 
+        name: 'Usuário', 
+        role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student',
+        email: currentUser.email
+      });
     }
   };
 
