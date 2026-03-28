@@ -15,6 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import CommentSection from '@/components/CommentSection';
+import AnnouncementList from '@/components/AnnouncementList';
 import { Link } from 'react-router-dom';
 
 const Feed = () => {
@@ -27,7 +28,6 @@ const Feed = () => {
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
 
   const fetchPosts = useCallback(async () => {
-    console.log('[Feed] Iniciando fetchPosts...');
     if (posts.length === 0) setLoading(true);
     setError(null);
     
@@ -51,12 +51,7 @@ const Feed = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (supabaseError) {
-        console.error('[Feed] Erro do Supabase ao buscar posts:', supabaseError);
-        throw supabaseError;
-      }
-
-      console.log(`[Feed] ${data?.length || 0} posts recebidos.`);
+      if (supabaseError) throw supabaseError;
 
       const processedPosts = (data || []).map(post => ({
         ...post,
@@ -66,35 +61,24 @@ const Feed = () => {
       
       setPosts(processedPosts);
     } catch (err: any) {
-      console.error('[Feed] Erro capturado no fetchPosts:', err);
+      console.error('[Feed] Erro ao buscar posts:', err);
       setError(err.message || 'Erro ao carregar o feed.');
     } finally {
       setLoading(false);
-      console.log('[Feed] Loading finalizado.');
     }
   }, [user?.id, posts.length]);
 
   useEffect(() => {
-    console.log(`[Feed] useEffect disparado. authLoading: ${authLoading}`);
     if (!authLoading) {
       fetchPosts();
 
       const channel = supabase
         .channel('feed_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, (payload) => {
-          console.log('[Feed] Mudança detectada na tabela posts:', payload);
-          fetchPosts();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, (payload) => {
-          console.log('[Feed] Mudança detectada na tabela likes:', payload);
-          fetchPosts();
-        })
-        .subscribe((status) => {
-          console.log(`[Feed] Status da inscrição no canal: ${status}`);
-        });
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchPosts())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => fetchPosts())
+        .subscribe();
 
       return () => {
-        console.log('[Feed] Limpando canal de mudanças.');
         supabase.removeChannel(channel);
       };
     }
@@ -157,7 +141,10 @@ const Feed = () => {
         .eq('id', postId);
 
       if (error) throw error;
+      
       showSuccess('Post removido.');
+      // Atualização otimista da interface
+      setPosts(prev => prev.filter(p => p.id !== postId));
     } catch (error: any) {
       showError('Erro ao excluir post.');
     }
@@ -177,6 +164,9 @@ const Feed = () => {
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
+        {/* Lista de Avisos (Announcements) */}
+        <AnnouncementList />
+
         {error && (
           <Card className="border-destructive/50 bg-destructive/5">
             <CardContent className="p-4 flex flex-col items-center gap-3 text-destructive">
