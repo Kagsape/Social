@@ -70,7 +70,6 @@ const Feed = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    // Só inicia a busca quando a autenticação terminar e houver um usuário
     if (!authLoading && user?.id) {
       fetchPosts();
 
@@ -278,7 +277,7 @@ const Feed = () => {
                       </Button>
                     )}
                   </div>
-                </Header>
+                </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">
                     {post.content}
