@@ -34,8 +34,11 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     { name: 'Laboratório', path: '/admin/lab', icon: Monitor },
     { name: 'Reservas', path: '/admin/reservations', icon: Calendar },
     { name: 'Usuários', path: '/admin/users', icon: Users },
+    { name: 'Cargos', path: '/admin/roles', icon: ShieldCheck, chiefOnly: true },
     { name: 'Configurações', path: '/admin/settings', icon: Settings },
   ];
+
+  const isChiefAdmin = userProfile?.email === 'xakatosh66@gmail.com';
 
   return (
     <Layout>
@@ -50,24 +53,28 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                 </h2>
               </div>
               <nav className="space-y-1">
-                {menuItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={cn(
-                      "flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group",
-                      location.pathname === item.path 
-                        ? "bg-primary text-primary-foreground shadow-md" 
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <item.icon className={cn("h-4 w-4", location.pathname === item.path ? "text-white" : "text-muted-foreground group-hover:text-primary")} />
-                      {item.name}
-                    </div>
-                    {location.pathname === item.path && <ChevronRight className="h-4 w-4" />}
-                  </Link>
-                ))}
+                {menuItems.map((item) => {
+                  if (item.chiefOnly && !isChiefAdmin) return null;
+                  
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={cn(
+                        "flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group",
+                        location.pathname === item.path
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <item.icon className={cn("h-4 w-4", location.pathname === item.path ? "text-white" : "text-muted-foreground group-hover:text-primary")} />
+                        {item.name}
+                      </div>
+                      {location.pathname === item.path && <ChevronRight className="h-4 w-4" />}
+                    </Link>
+                  );
+                })}
               </nav>
               
               <div className="mt-8 pt-6 border-t">

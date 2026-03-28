@@ -18,7 +18,7 @@ import CommentSection from '@/components/CommentSection';
 import { Link } from 'react-router-dom';
 
 const Feed = () => {
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading, hasPermission } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
   const [newPost, setNewPost] = useState('');
   const [loading, setLoading] = useState(true);
@@ -256,11 +256,11 @@ const Feed = () => {
                         </p>
                       </div>
                     </div>
-                    {(post.user_id === user?.id || userProfile?.role === 'admin') && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="text-muted-foreground hover:text-destructive rounded-full" 
+                    {(post.user_id === user?.id || hasPermission('delete_any_post')) && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive rounded-full"
                         onClick={() => deletePost(post.id)}
                       >
                         <Trash2 className="h-4 w-4" />

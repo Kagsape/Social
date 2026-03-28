@@ -20,6 +20,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import LabManagement from "./pages/LabManagement";
 import AdminCoursesPage from "./pages/AdminCoursesPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
+import AdminRolesPage from "./pages/AdminRolesPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import AuthCallback from "./pages/AuthCallback";
@@ -91,6 +92,11 @@ const App = () => (
             <Route path="/admin/users" element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminUsersPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/roles" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminRolesPage />
               </ProtectedRoute>
             } />
             <Route path="/admin/settings" element={

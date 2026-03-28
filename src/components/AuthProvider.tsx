@@ -11,6 +11,7 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,6 +22,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const hasPermission = (permission: string) => {
+    if (!userProfile) return false;
+    
+    // Chief Admin has all permissions
+    if (userProfile.email === 'xakatosh66@gmail.com') return true;
+    
+    // Check permissions from the role
+    const roleData = Array.isArray(userProfile.roles) ? userProfile.roles[0] : userProfile.roles;
+    const permissions = roleData?.permissions || {};
+    return !!permissions[permission];
+  };
+
   const fetchUserProfile = async (userId: string, currentUser: User) => {
     const startTime = performance.now();
     console.log(`[Auth] Iniciando busca de perfil para: ${userId}`);
@@ -28,7 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('*, roles(permissions)')
         .eq('id', userId)
         .maybeSingle();
 
@@ -50,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: currentUser.email,
             role: currentUser.user_metadata?.role || 'student'
           })
-          .select()
+          .select('*, roles(permissions)')
           .single();
 
         if (insertError) {
@@ -143,7 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, userProfile, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, userProfile, loading, signOut, refreshProfile, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );

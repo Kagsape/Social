@@ -47,10 +47,30 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const AdminUsersPage = () => {
+  const { userProfile } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  
+  // Role change state
+  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [newRole, setNewRole] = useState('');
+  const [updatingRole, setUpdatingRole] = useState(false);
+
+  const isChiefAdmin = userProfile?.email === 'xakatosh66@gmail.com';
+
+  const fetchRoles = async () => {
+    try {
+      const { data, error } = await supabase.from('roles').select('name').order('name');
+      if (error) throw error;
+      setRoles(data || []);
+    } catch (error) {
+      console.error('Error fetching roles:', error);
+    }
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -74,9 +94,10 @@ const AdminUsersPage = () => {
 
   useEffect(() => {
     fetchUsers();
+    fetchRoles();
   }, [roleFilter]);
 
-  const filteredUsers = users.filter(user => 
+  const filteredUsers = users.filter(user =>
     user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -90,7 +111,36 @@ const AdminUsersPage = () => {
       case 'student':
         return <Badge variant="secondary" className="gap-1"><GraduationCap className="h-3 w-3" /> Aluno</Badge>;
       default:
-        return <Badge variant="outline">{role}</Badge>;
+        return <Badge variant="outline" className="capitalize">{role}</Badge>;
+    }
+  };
+
+  const handleOpenRoleDialog = (user: any) => {
+    setSelectedUser(user);
+    setNewRole(user.role);
+    setIsRoleDialogOpen(true);
+  };
+
+  const handleUpdateRole = async () => {
+    if (!selectedUser || !newRole) return;
+    
+    setUpdatingRole(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ role: newRole })
+        .eq('id', selectedUser.id);
+
+      if (error) throw error;
+      
+      showSuccess(`Cargo de ${selectedUser.name} atualizado para ${newRole}`);
+      setIsRoleDialogOpen(false);
+      fetchUsers();
+    } catch (error: any) {
+      console.error('Error updating role:', error);
+      showError(error.message || 'Erro ao atualizar cargo');
+    } finally {
+      setUpdatingRole(false);
     }
   };
 
@@ -199,6 +249,9 @@ const AdminUsersPage = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem className="gap-2" onClick={() => handleOpenRoleDialog(user)}>
+                                <Shield className="h-4 w-4" /> Alterar Cargo
+                              </DropdownMenuItem>
                               <DropdownMenuItem className="gap-2">
                                 <Edit className="h-4 w-4" /> Editar
                               </DropdownMenuItem>
@@ -216,6 +269,41 @@ const AdminUsersPage = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Role Change Dialog */}
+        <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Alterar Cargo</DialogTitle>
+              <DialogDescription>
+                Selecione o novo cargo para <strong>{selectedUser?.name}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="role">Cargo</Label>
+                <Select value={newRole} onValueChange={setNewRole}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um cargo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles.map((role) => (
+                      <SelectItem key={role.name} value={role.name}>
+                        {role.name.charAt(0).toUpperCase() + role.name.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleUpdateRole} disabled={updatingRole}>
+                {updatingRole ? 'Atualizando...' : 'Salvar Alteração'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );

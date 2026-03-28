@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
-  role TEXT DEFAULT 'student' CHECK (role IN ('admin', 'teacher', 'student')),
+  role TEXT DEFAULT 'student' REFERENCES public.roles(name),
   avatar_url TEXT,
   student_id TEXT UNIQUE, -- Matrícula para alunos
   teacher_id TEXT UNIQUE, -- Registro para professores
@@ -132,6 +132,21 @@ CREATE TABLE IF NOT EXISTS public.announcements (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 13. Tabela de Cargos (Roles)
+CREATE TABLE IF NOT EXISTS public.roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT UNIQUE NOT NULL,
+  permissions JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Inserir cargos padrão
+INSERT INTO public.roles (name, permissions) VALUES
+('admin', '{"delete_any_post": true, "manage_users": true, "manage_roles": true, "manage_system": true}'),
+('teacher', '{"delete_any_post": false, "manage_users": false, "manage_roles": false, "manage_system": false}'),
+('student', '{"delete_any_post": false, "manage_users": false, "manage_roles": false, "manage_system": false}')
+ON CONFLICT (name) DO NOTHING;
+
 -- Habilitar Row Level Security (RLS) em todas as tabelas
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
@@ -145,12 +160,18 @@ ALTER TABLE public.lab_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.grades ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de Segurança Básicas (Exemplos)
 CREATE POLICY "Leitura pública de usuários" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Leitura pública de posts" ON public.posts FOR SELECT USING (true);
 CREATE POLICY "Leitura pública de comentários" ON public.comments FOR SELECT USING (true);
 CREATE POLICY "Leitura pública de curtidas" ON public.likes FOR SELECT USING (true);
+CREATE POLICY "Leitura pública de cargos" ON public.roles FOR SELECT USING (true);
+CREATE POLICY "Apenas Chief Admin gerencia cargos" ON public.roles FOR ALL USING (
+  auth.jwt() ->> 'email' = 'xakatosh66@gmail.com'
+);
+
 CREATE POLICY "Usuários veem suas próprias notificações" ON public.notifications FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Usuários atualizam suas próprias notificações" ON public.notifications FOR UPDATE USING (auth.uid() = user_id);
 
