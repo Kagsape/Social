@@ -27,6 +27,7 @@ const Feed = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
 
+  // 1. Função de busca memorizada
   const fetchPosts = useCallback(async (isSilent = false) => {
     if (!user?.id) return;
     if (!isSilent) setLoading(true);
@@ -69,10 +70,16 @@ const Feed = () => {
     }
   }, [user?.id]);
 
+  // 2. Efeito para carga inicial de dados
   useEffect(() => {
     if (!authLoading && user?.id) {
       fetchPosts();
+    }
+  }, [authLoading, user?.id, fetchPosts]);
 
+  // 3. Efeito dedicado ao Realtime (sem depender de fetchPosts para evitar loops)
+  useEffect(() => {
+    if (!authLoading && user?.id) {
       const channel = supabase
         .channel('feed_changes')
         .on('postgres_changes', { 
@@ -91,7 +98,7 @@ const Feed = () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [authLoading, user?.id, fetchPosts]);
+  }, [authLoading, user?.id]); // Removido fetchPosts das dependências
 
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
@@ -109,6 +116,7 @@ const Feed = () => {
 
       showSuccess('Post publicado!');
       setNewPost('');
+      // O realtime cuidará da atualização, mas chamamos aqui para feedback imediato
       fetchPosts(true);
     } catch (error: any) {
       showError('Erro ao publicar.');
