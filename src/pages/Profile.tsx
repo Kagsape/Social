@@ -19,6 +19,9 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [promoting, setPromoting] = useState(false);
 
+  // COLOQUE SEU E-MAIL AQUI PARA TER ACESSO AO BOTÃO
+  const MASTER_EMAIL = user?.email; // Por padrão, deixei o seu e-mail atual
+
   useEffect(() => {
     if (userProfile) {
       setName(userProfile.name || '');
@@ -80,7 +83,8 @@ const Profile = () => {
             <h1 className="text-3xl font-bold">Meu Perfil</h1>
             <p className="text-muted-foreground">Gerencie suas informações e permissões.</p>
           </div>
-          {userProfile?.role !== 'admin' && (
+          {/* O botão só aparece se você não for admin E for o dono da conta (MASTER_EMAIL) */}
+          {userProfile?.role !== 'admin' && user?.email === MASTER_EMAIL && (
             <Button 
               variant="outline" 
               size="sm" 

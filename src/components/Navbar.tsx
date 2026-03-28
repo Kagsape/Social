@@ -6,15 +6,12 @@ import {
   LayoutDashboard, 
   BookOpen, 
   Users, 
-  Bell, 
   Search, 
   User, 
   ShieldCheck,
   Monitor,
   Calendar,
-  BarChart3,
-  Settings,
-  UserCircle
+  Settings
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -51,12 +48,10 @@ const Navbar = () => {
       );
     } else if (userProfile.role === 'admin') {
       roleBasedItems.push(
+        { name: 'Feed', path: '/feed', icon: Users }, // Adicionado Feed para Admin
         { name: 'Admin', path: '/admin', icon: ShieldCheck },
         { name: 'Cursos', path: '/courses', icon: BookOpen },
-        { name: 'Laboratório', path: '/admin/lab', icon: Monitor },
-        { name: 'Reservas', path: '/admin/reservations', icon: Calendar },
-        { name: 'Usuários', path: '/admin/users', icon: Users },
-        { name: 'Config', path: '/admin/settings', icon: Settings }
+        { name: 'Laboratório', path: '/admin/lab', icon: Monitor }
       );
     }
 
