@@ -19,21 +19,26 @@ import {
   MessageSquare, 
   Heart,
   Edit3,
-  MapPin
+  MapPin,
+  UserPlus,
+  UserMinus
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/components/AuthProvider';
+import { showSuccess, showError } from '@/utils/toast';
 
 const UserProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, userProfile: currentUserProfile } = useAuth();
   
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
-  const [stats, setStats] = useState({ posts: 0, likesReceived: 0 });
+  const [stats, setStats] = useState({ posts: 0, likesReceived: 0, followers: 0, following: 0 });
+  const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -66,11 +71,36 @@ const UserProfile = () => {
         
         setPosts(processedPosts);
 
-        // 3. Calcular Estatísticas
+        // 3. Buscar Seguidores e Seguindo
+        const { count: followersCount } = await supabase
+          .from('follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', id);
+
+        const { count: followingCount } = await supabase
+          .from('follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('follower_id', id);
+
+        // 4. Verificar se o usuário atual segue este perfil
+        if (currentUser && currentUser.id !== id) {
+          const { data: followData } = await supabase
+            .from('follows')
+            .select('*')
+            .eq('follower_id', currentUser.id)
+            .eq('following_id', id)
+            .maybeSingle();
+          
+          setIsFollowing(!!followData);
+        }
+
+        // 5. Calcular Estatísticas
         const totalLikes = processedPosts.reduce((acc, post) => acc + post.likes_count, 0);
         setStats({
           posts: processedPosts.length,
-          likesReceived: totalLikes
+          likesReceived: totalLikes,
+          followers: followersCount || 0,
+          following: followingCount || 0
         });
 
       } catch (error) {
@@ -81,7 +111,52 @@ const UserProfile = () => {
     };
 
     fetchProfileData();
-  }, [id]);
+  }, [id, currentUser]);
+
+  const handleFollowToggle = async () => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+
+    setFollowLoading(true);
+    try {
+      if (isFollowing) {
+        await supabase
+          .from('follows')
+          .delete()
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', id);
+        
+        setIsFollowing(false);
+        setStats(prev => ({ ...prev, followers: prev.followers - 1 }));
+        showSuccess(`Você deixou de seguir ${profile.name}`);
+      } else {
+        await supabase
+          .from('follows')
+          .insert({
+            follower_id: currentUser.id,
+            following_id: id
+          });
+        
+        // Notificar o usuário
+        await supabase.from('notifications').insert({
+          user_id: id,
+          actor_id: currentUser.id,
+          type: 'follow',
+          message: `${currentUserProfile?.name} começou a te seguir.`
+        });
+
+        setIsFollowing(true);
+        setStats(prev => ({ ...prev, followers: prev.followers + 1 }));
+        showSuccess(`Agora você segue ${profile.name}`);
+      }
+    } catch (error) {
+      showError('Erro ao processar ação.');
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -142,13 +217,26 @@ const UserProfile = () => {
                 </div>
               </div>
 
-              {isOwnProfile && (
-                <Link to="/profile" className="mb-2">
-                  <Button variant="outline" className="gap-2 rounded-full">
-                    <Edit3 className="h-4 w-4" /> Editar Perfil
+              <div className="flex gap-2 mb-2">
+                {isOwnProfile ? (
+                  <Link to="/profile">
+                    <Button variant="outline" className="gap-2 rounded-full">
+                      <Edit3 className="h-4 w-4" /> Editar Perfil
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button 
+                    variant={isFollowing ? "outline" : "default"} 
+                    className={cn("gap-2 rounded-full px-6", isFollowing && "text-destructive hover:bg-destructive/10")}
+                    onClick={handleFollowToggle}
+                    disabled={followLoading}
+                  >
+                    {followLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                      isFollowing ? <><UserMinus className="h-4 w-4" /> Deixar de Seguir</> : <><UserPlus className="h-4 w-4" /> Seguir</>
+                    )}
                   </Button>
-                </Link>
-              )}
+                )}
+              </div>
             </div>
 
             {profile.bio && (
@@ -177,6 +265,14 @@ const UserProfile = () => {
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-center">
                   <p className="text-2xl font-bold text-red-500">{stats.likesReceived}</p>
                   <p className="text-xs text-muted-foreground uppercase font-bold">Curtidas</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-center">
+                  <p className="text-2xl font-bold">{stats.followers}</p>
+                  <p className="text-xs text-muted-foreground uppercase font-bold">Seguidores</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-center">
+                  <p className="text-2xl font-bold">{stats.following}</p>
+                  <p className="text-xs text-muted-foreground uppercase font-bold">Seguindo</p>
                 </div>
               </CardContent>
             </Card>

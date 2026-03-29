@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2, AlertCircle, RefreshCw, X } from 'lucide-react';
+import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2, AlertCircle, RefreshCw, X, Users } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
@@ -29,10 +29,8 @@ const Feed = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
-  
-  // Estados para imagem
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [feedMode, setFeedMode] = useState<'following' | 'all'>('following');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fetchingRef = useRef(false);
@@ -44,7 +42,7 @@ const Feed = () => {
     if (!isSilent) setLoading(true);
     
     try {
-      const { data, error: supabaseError } = await supabase
+      let query = supabase
         .from('posts')
         .select(`
           id,
@@ -56,6 +54,22 @@ const Feed = () => {
           likes (user_id)
         `)
         .order('created_at', { ascending: false });
+
+      if (feedMode === 'following') {
+        // Buscar IDs de quem o usuário segue
+        const { data: followingData } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.id);
+        
+        const followingIds = (followingData || []).map(f => f.following_id);
+        // Incluir o próprio usuário no feed
+        followingIds.push(user.id);
+        
+        query = query.in('user_id', followingIds);
+      }
+
+      const { data, error: supabaseError } = await query;
 
       if (supabaseError) throw supabaseError;
 
@@ -74,7 +88,7 @@ const Feed = () => {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [user?.id]);
+  }, [user?.id, feedMode]);
 
   useEffect(() => {
     if (!authLoading && user?.id) {
@@ -96,11 +110,6 @@ const Feed = () => {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        showError('A imagem deve ter no máximo 5MB');
-        return;
-      }
-      setSelectedFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -109,40 +118,15 @@ const Feed = () => {
     }
   };
 
-  const uploadImage = async (file: File) => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `${user!.id}/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('posts')
-      .upload(filePath, file);
-
-    if (uploadError) throw uploadError;
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('posts')
-      .getPublicUrl(filePath);
-
-    return publicUrl;
-  };
-
   const createPost = async () => {
-    if (!newPost.trim() && !selectedFile) return;
-    if (!user) return;
+    if (!newPost.trim() || !user) return;
     
     setSubmitting(true);
     try {
-      let imageUrl = null;
-      if (selectedFile) {
-        imageUrl = await uploadImage(selectedFile);
-      }
-
       const { error } = await supabase
         .from('posts')
         .insert({
           content: newPost.trim(),
-          image_url: imageUrl,
           user_id: user.id
         });
 
@@ -150,11 +134,9 @@ const Feed = () => {
 
       showSuccess('Post publicado com sucesso!');
       setNewPost('');
-      setSelectedFile(null);
       setImagePreview(null);
       fetchPosts(true);
     } catch (error: any) {
-      console.error('Erro ao criar post:', error);
       showError('Erro ao publicar seu post.');
     } finally {
       setSubmitting(false);
@@ -221,6 +203,25 @@ const Feed = () => {
       <div className="max-w-2xl mx-auto space-y-6">
         <AnnouncementList />
 
+        <div className="flex items-center justify-center gap-4 mb-2">
+          <Button 
+            variant={feedMode === 'following' ? 'default' : 'ghost'} 
+            size="sm" 
+            className="rounded-full gap-2"
+            onClick={() => setFeedMode('following')}
+          >
+            <Users className="h-4 w-4" /> Seguindo
+          </Button>
+          <Button 
+            variant={feedMode === 'all' ? 'default' : 'ghost'} 
+            size="sm" 
+            className="rounded-full gap-2"
+            onClick={() => setFeedMode('all')}
+          >
+            <RefreshCw className="h-4 w-4" /> Descobrir
+          </Button>
+        </div>
+
         {error && (
           <Card className="border-destructive/50 bg-destructive/5">
             <CardContent className="p-6 flex flex-col items-center gap-3 text-destructive text-center">
@@ -255,10 +256,7 @@ const Feed = () => {
                       variant="destructive" 
                       size="icon" 
                       className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg"
-                      onClick={() => {
-                        setSelectedFile(null);
-                        setImagePreview(null);
-                      }}
+                      onClick={() => setImagePreview(null)}
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -285,7 +283,7 @@ const Feed = () => {
                   </div>
                   <Button 
                     onClick={createPost} 
-                    disabled={(!newPost.trim() && !selectedFile) || submitting}
+                    disabled={!newPost.trim() || submitting}
                     className="rounded-full px-6 font-semibold shadow-sm transition-all active:scale-95"
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Publicar'}
