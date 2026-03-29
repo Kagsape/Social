@@ -32,11 +32,7 @@ const CommentSection = ({ postId }: CommentSectionProps) => {
           content,
           created_at,
           user_id,
-          users (
-            id,
-            name,
-            avatar_url
-          )
+          users (id, name, avatar_url)
         `)
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
@@ -60,6 +56,7 @@ const CommentSection = ({ postId }: CommentSectionProps) => {
 
     setSubmitting(true);
     try {
+      // 1. Inserir comentário
       const { error } = await supabase
         .from('comments')
         .insert({
@@ -69,6 +66,24 @@ const CommentSection = ({ postId }: CommentSectionProps) => {
         });
 
       if (error) throw error;
+
+      // 2. Buscar autor do post para notificar
+      const { data: postData } = await supabase
+        .from('posts')
+        .select('user_id')
+        .eq('id', postId)
+        .single();
+
+      if (postData && postData.user_id !== user.id) {
+        await supabase.from('notifications').insert({
+          user_id: postData.user_id,
+          actor_id: user.id,
+          type: 'comment',
+          post_id: postId,
+          message: `${userProfile?.name} comentou no seu post.`
+        });
+      }
+
       setNewComment('');
       fetchComments();
     } catch (error) {
@@ -80,11 +95,7 @@ const CommentSection = ({ postId }: CommentSectionProps) => {
 
   const deleteComment = async (commentId: string) => {
     try {
-      const { error } = await supabase
-        .from('comments')
-        .delete()
-        .eq('id', commentId);
-      
+      const { error } = await supabase.from('comments').delete().eq('id', commentId);
       if (error) throw error;
       setComments(prev => prev.filter(c => c.id !== commentId));
     } catch (error) {
