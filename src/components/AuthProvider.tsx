@@ -24,6 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
   
+  // Refs para controle absoluto de fluxo
   const initializedRef = useRef(false);
   const lastFetchedUserIdRef = useRef<string | null>(null);
   const isFetchingProfileRef = useRef(false);
@@ -35,12 +36,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
+    // Se já estamos buscando ou se já buscamos este usuário, ignoramos
     if (isFetchingProfileRef.current || (lastFetchedUserIdRef.current === userId && userProfile)) {
       return;
     }
 
     isFetchingProfileRef.current = true;
     try {
+      console.log('[Auth] fetchUserProfile iniciado para:', userId);
       lastFetchedUserIdRef.current = userId;
       
       const { data: profile, error } = await supabase
@@ -54,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let finalProfile = profile;
 
       if (!profile) {
+        console.log('[Auth] Perfil não encontrado, criando novo para:', userId);
         const { data: newProfile, error: createError } = await supabase
           .from('users')
           .upsert({
@@ -92,11 +96,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [userProfile]);
 
   useEffect(() => {
+    // Proteção contra execução dupla (StrictMode ou remounts rápidos)
     if (initializedRef.current) return;
     initializedRef.current = true;
 
+    console.log('[Auth] Inicializando AuthProvider (execução única)...');
+
     const initialize = async () => {
       try {
+        // Chamada única ao getSession
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (initialSession) {
           setSession(initialSession);
@@ -112,8 +120,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initialize();
 
+    // Registro único do listener de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        console.log('[Auth] onAuthStateChange:', event);
+        
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           const currentUser = currentSession?.user ?? null;
           setSession(currentSession);
@@ -134,7 +145,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     return () => {
+      console.log('[Auth] Limpando subscrição de autenticação');
       subscription.unsubscribe();
+      initializedRef.current = false; // Permite reinicialização se o componente for realmente desmontado
     };
   }, [fetchUserProfile]);
 
