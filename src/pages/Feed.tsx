@@ -103,21 +103,57 @@ const Feed = () => {
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
     
+    const content = newPost.trim();
+    const tempId = `temp-${Date.now()}`;
+    
+    // Objeto otimista para exibição imediata
+    const optimisticPost = {
+      id: tempId,
+      content: content,
+      created_at: new Date().toISOString(),
+      user_id: user.id,
+      users: {
+        id: user.id,
+        name: userProfile?.name,
+        avatar_url: userProfile?.avatar_url,
+        role: userProfile?.role
+      },
+      likes_count: 0,
+      has_liked: false,
+      isOptimistic: true
+    };
+
+    // Atualiza estado local instantaneamente
+    setPosts(prev => [optimisticPost, ...prev]);
+    setNewPost('');
+    setImagePreview(null);
     setSubmitting(true);
+
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('posts')
         .insert({
-          content: newPost,
+          content: content,
           user_id: user.id
-        });
+        })
+        .select(`
+          id,
+          content,
+          created_at,
+          user_id,
+          users (id, name, avatar_url, role)
+        `)
+        .single();
 
       if (error) throw error;
 
+      // Substitui o post otimista pelo real (com ID correto do banco)
+      setPosts(prev => prev.map(p => p.id === tempId ? { ...data, likes_count: 0, has_liked: false } : p));
       showSuccess('Post publicado com sucesso!');
-      setNewPost('');
-      setImagePreview(null);
     } catch (error: any) {
+      // Rollback: remove o post otimista e restaura o texto se falhar
+      setPosts(prev => prev.filter(p => p.id !== tempId));
+      setNewPost(content);
       showError('Erro ao publicar seu post.');
     } finally {
       setSubmitting(false);
@@ -263,7 +299,10 @@ const Feed = () => {
             <EmptyFeed />
           ) : (
             posts.map(post => (
-              <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-bottom-2">
+              <Card key={post.id} className={cn(
+                "border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-bottom-2",
+                post.isOptimistic && "opacity-70 grayscale-[0.5]"
+              )}>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -285,7 +324,7 @@ const Feed = () => {
                         </p>
                       </div>
                     </div>
-                    {(post.user_id === user?.id || hasPermission('delete_any_post')) && (
+                    {(post.user_id === user?.id || hasPermission('delete_any_post')) && !post.isOptimistic && (
                       <Button 
                         variant="ghost" 
                         size="icon" 
@@ -302,20 +341,24 @@ const Feed = () => {
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{post.content}</p>
                   <div className="flex items-center gap-6 pt-4 border-t">
                     <button 
-                      onClick={() => toggleLike(post)} 
+                      onClick={() => !post.isOptimistic && toggleLike(post)} 
+                      disabled={post.isOptimistic}
                       className={cn(
                         "flex items-center gap-2 text-sm transition-all active:scale-125", 
-                        post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
+                        post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500",
+                        post.isOptimistic && "cursor-not-allowed opacity-50"
                       )}
                     >
                       <Heart className={cn("h-5 w-5 transition-transform", post.has_liked && "fill-current scale-110")} />
                       <span className="font-bold">{post.likes_count}</span>
                     </button>
                     <button 
-                      onClick={() => setActiveComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))} 
+                      onClick={() => !post.isOptimistic && setActiveComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))} 
+                      disabled={post.isOptimistic}
                       className={cn(
                         "flex items-center gap-2 text-sm transition-colors", 
-                        activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary"
+                        activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary",
+                        post.isOptimistic && "cursor-not-allowed opacity-50"
                       )}
                     >
                       <MessageSquare className="h-5 w-5" />
@@ -323,7 +366,11 @@ const Feed = () => {
                     </button>
                     <button 
                       onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/feed#post-${post.id}`); showSuccess('Link copiado!'); }} 
-                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+                      disabled={post.isOptimistic}
+                      className={cn(
+                        "flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors",
+                        post.isOptimistic && "cursor-not-allowed opacity-50"
+                      )}
                     >
                       <Share2 className="h-5 w-5" />
                       <span className="font-medium">Compartilhar</span>
