@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2, AlertCircle, RefreshCw, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
@@ -54,8 +54,9 @@ const Feed = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   
-  const initializedRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const fetchingRef = useRef(false);
 
   const fetchPosts = useCallback(async (isSilent = false) => {
@@ -63,7 +64,6 @@ const Feed = () => {
     
     fetchingRef.current = true;
     if (!isSilent) setLoading(true);
-    setError(null);
     
     try {
       const { data, error: supabaseError } = await supabase
@@ -73,15 +73,8 @@ const Feed = () => {
           content,
           created_at,
           user_id,
-          users (
-            id,
-            name,
-            avatar_url,
-            role
-          ),
-          likes (
-            user_id
-          )
+          users (id, name, avatar_url, role),
+          likes (user_id)
         `)
         .order('created_at', { ascending: false });
 
@@ -94,9 +87,10 @@ const Feed = () => {
       }));
       
       setPosts(processedPosts);
+      setError(null);
     } catch (err: any) {
       console.error('[Feed] Erro ao buscar posts:', err);
-      setError(err.message || 'Erro ao carregar o feed.');
+      setError('Erro ao carregar o feed.');
     } finally {
       setLoading(false);
       fetchingRef.current = false;
@@ -104,11 +98,33 @@ const Feed = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!authLoading && user?.id && userProfile && !initializedRef.current) {
-      initializedRef.current = true;
+    if (!authLoading && user?.id) {
       fetchPosts();
+
+      // Real-time subscription para posts
+      const channel = supabase
+        .channel('feed_changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
+          fetchPosts(true);
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
-  }, [authLoading, user?.id, userProfile, fetchPosts]);
+  }, [authLoading, user?.id, fetchPosts]);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
@@ -126,7 +142,7 @@ const Feed = () => {
 
       showSuccess('Post publicado!');
       setNewPost('');
-      fetchPosts(true);
+      setImagePreview(null);
     } catch (error: any) {
       showError('Erro ao publicar.');
     } finally {
@@ -134,12 +150,13 @@ const Feed = () => {
     }
   };
 
-  const toggleLike = async (postId: string, hasLiked: boolean) => {
+  const toggleLike = async (post: any) => {
     if (!user) return;
+    const hasLiked = post.has_liked;
 
-    // Atualização otimista para UX instantânea
+    // Atualização otimista
     setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
+      if (p.id === post.id) {
         return {
           ...p,
           has_liked: !hasLiked,
@@ -151,50 +168,38 @@ const Feed = () => {
 
     try {
       if (hasLiked) {
-        await supabase
-          .from('likes')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
+        await supabase.from('likes').delete().eq('post_id', post.id).eq('user_id', user.id);
       } else {
-        await supabase
-          .from('likes')
-          .insert({ post_id: postId, user_id: user.id });
+        await supabase.from('likes').insert({ post_id: post.id, user_id: user.id });
+        
+        // Criar notificação se não for o próprio post
+        if (post.user_id !== user.id) {
+          await supabase.from('notifications').insert({
+            user_id: post.user_id,
+            actor_id: user.id,
+            type: 'like',
+            post_id: post.id,
+            message: `${userProfile?.name} curtiu seu post.`
+          });
+        }
       }
     } catch (error: any) {
-      // Reverte em caso de erro
       fetchPosts(true);
-      showError('Erro ao processar curtida.');
     }
   };
 
   const deletePost = async (postId: string) => {
     if (!confirm('Tem certeza que deseja excluir este post?')) return;
-
     try {
-      const { error } = await supabase
-        .from('posts')
-        .delete()
-        .eq('id', postId);
-
+      const { error } = await supabase.from('posts').delete().eq('id', postId);
       if (error) throw error;
       showSuccess('Post removido.');
-      setPosts(prev => prev.filter(p => p.id !== postId));
     } catch (error: any) {
       showError('Erro ao excluir post.');
     }
   };
 
-  if (authLoading) {
-    return (
-      <Layout>
-        <div className="max-w-2xl mx-auto space-y-6">
-          <Skeleton className="h-32 w-full rounded-xl" />
-          <FeedSkeleton />
-        </div>
-      </Layout>
-    );
-  }
+  if (authLoading) return <Layout><div className="max-w-2xl mx-auto space-y-6"><FeedSkeleton /></div></Layout>;
 
   return (
     <Layout>
@@ -205,11 +210,8 @@ const Feed = () => {
           <Card className="border-destructive/50 bg-destructive/5">
             <CardContent className="p-6 flex flex-col items-center gap-3 text-destructive text-center">
               <AlertCircle className="h-10 w-10 opacity-50" />
-              <div className="space-y-1">
-                <p className="font-bold">Ops! Algo deu errado.</p>
-                <p className="text-sm opacity-80">{error}</p>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => fetchPosts()} className="mt-2 gap-2">
+              <p className="font-bold">{error}</p>
+              <Button variant="outline" size="sm" onClick={() => fetchPosts()} className="gap-2">
                 <RefreshCw className="h-3 w-3" /> Tentar Novamente
               </Button>
             </CardContent>
@@ -221,20 +223,45 @@ const Feed = () => {
             <div className="flex gap-4">
               <Avatar className="h-10 w-10 border">
                 <AvatarImage src={userProfile?.avatar_url} />
-                <AvatarFallback className="bg-primary text-primary-foreground">
-                  {userProfile?.name?.charAt(0) || 'U'}
-                </AvatarFallback>
+                <AvatarFallback className="bg-primary text-primary-foreground">{userProfile?.name?.charAt(0)}</AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-4">
                 <Textarea
-                  placeholder={`No que você está pensando, ${userProfile?.name?.split(' ')[0] || 'aluno'}?`}
+                  placeholder={`No que você está pensando, ${userProfile?.name?.split(' ')[0]}?`}
                   value={newPost}
                   onChange={(e) => setNewPost(e.target.value)}
                   className="min-h-[100px] resize-none border-none focus-visible:ring-0 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4"
                 />
+                
+                {imagePreview && (
+                  <div className="relative rounded-xl overflow-hidden border">
+                    <img src={imagePreview} alt="Preview" className="w-full h-auto max-h-80 object-cover" />
+                    <Button 
+                      variant="destructive" 
+                      size="icon" 
+                      className="absolute top-2 right-2 h-8 w-8 rounded-full"
+                      onClick={() => setImagePreview(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center pt-2 border-t">
                   <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" className="rounded-full gap-2 text-muted-foreground hover:text-primary">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      ref={fileInputRef} 
+                      onChange={handleImageSelect}
+                    />
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="rounded-full gap-2 text-muted-foreground hover:text-primary"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
                       <ImageIcon className="h-4 w-4" /> Foto
                     </Button>
                   </div>
@@ -243,8 +270,7 @@ const Feed = () => {
                     disabled={!newPost.trim() || submitting}
                     className="rounded-full px-6 font-semibold"
                   >
-                    {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    {submitting ? 'Publicando...' : 'Publicar'}
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Publicar'}
                   </Button>
                 </div>
               </div>
@@ -255,16 +281,6 @@ const Feed = () => {
         <div className="space-y-4">
           {loading && posts.length === 0 ? (
             <FeedSkeleton />
-          ) : posts.length === 0 ? (
-            <Card className="border-none shadow-sm">
-              <CardContent className="py-16 text-center space-y-2">
-                <div className="bg-slate-100 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <h3 className="font-bold text-lg">O feed está vazio</h3>
-                <p className="text-muted-foreground">Seja o primeiro a compartilhar algo!</p>
-              </CardContent>
-            </Card>
           ) : (
             posts.map(post => (
               <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900">
@@ -274,21 +290,15 @@ const Feed = () => {
                       <Link to={`/profile/${post.user_id}`}>
                         <Avatar className="h-10 w-10 border hover:opacity-80 transition-opacity">
                           <AvatarImage src={post.users?.avatar_url} />
-                          <AvatarFallback className="bg-slate-200 dark:bg-slate-700">
-                            {post.users?.name?.charAt(0) || 'U'}
-                          </AvatarFallback>
+                          <AvatarFallback>{post.users?.name?.charAt(0)}</AvatarFallback>
                         </Avatar>
                       </Link>
                       <div>
                         <div className="flex items-center gap-2">
                           <Link to={`/profile/${post.user_id}`} className="font-bold text-sm hover:underline">
-                            {post.users?.name || 'Usuário'}
+                            {post.users?.name}
                           </Link>
-                          {post.users?.role === 'teacher' && (
-                            <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                              Professor
-                            </Badge>
-                          )}
+                          {post.users?.role === 'teacher' && <Badge variant="secondary" className="text-[10px] h-4 px-1">Professor</Badge>}
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {post.created_at ? formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: ptBR }) : 'Agora'}
@@ -296,57 +306,29 @@ const Feed = () => {
                       </div>
                     </div>
                     {(post.user_id === user?.id || hasPermission('delete_any_post')) && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive rounded-full"
-                        onClick={() => deletePost(post.id)}
-                      >
+                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive rounded-full" onClick={() => deletePost(post.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">
-                    {post.content}
-                  </p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{post.content}</p>
                   <div className="flex items-center gap-6 pt-4 border-t">
-                    <button 
-                      onClick={() => toggleLike(post.id, post.has_liked)}
-                      className={cn(
-                        "flex items-center gap-2 text-sm transition-all hover:scale-110",
-                        post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
-                      )}
-                    >
+                    <button onClick={() => toggleLike(post)} className={cn("flex items-center gap-2 text-sm transition-all", post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500")}>
                       <Heart className={cn("h-5 w-5", post.has_liked && "fill-current")} />
                       <span className="font-bold">{post.likes_count}</span>
                     </button>
-                    <button 
-                      onClick={() => setActiveComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))}
-                      className={cn(
-                        "flex items-center gap-2 text-sm transition-colors",
-                        activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary"
-                      )}
-                    >
+                    <button onClick={() => setActiveComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))} className={cn("flex items-center gap-2 text-sm transition-colors", activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary")}>
                       <MessageSquare className="h-5 w-5" />
                       <span className="font-medium">Comentar</span>
                     </button>
-                    <button 
-                      onClick={() => {
-                        navigator.clipboard.writeText(`${window.location.origin}/feed#post-${post.id}`);
-                        showSuccess('Link copiado!');
-                      }}
-                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
-                    >
+                    <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/feed#post-${post.id}`); showSuccess('Link copiado!'); }} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
                       <Share2 className="h-5 w-5" />
                       <span className="font-medium">Compartilhar</span>
                     </button>
                   </div>
-
-                  {activeComments[post.id] && (
-                    <CommentSection postId={post.id} />
-                  )}
+                  {activeComments[post.id] && <CommentSection postId={post.id} />}
                 </CardContent>
               </Card>
             ))
