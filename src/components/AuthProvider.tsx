@@ -94,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       profileLoadingRef.current = null;
     }
-  }, []); // Dependência vazia para manter a identidade estável
+  }, []);
 
   useEffect(() => {
     // Garante que o efeito de inicialização rode apenas uma vez
@@ -109,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (initialSession) {
           setSession(initialSession);
           setUser(initialSession.user);
-          await fetchUserProfile(initialSession.user.id, initialSession.user);
+          // REMOVIDO: fetchUserProfile não deve ser chamado aqui para evitar concorrência
         }
       } catch (error) {
         console.error('[Auth] Erro ao obter sessão inicial:', error);
@@ -121,18 +121,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initialize();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
+      (event, currentSession) => {
         console.log('[Auth] onAuthStateChange:', event);
         
         const currentUser = currentSession?.user ?? null;
         
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
           setSession(currentSession);
           setUser(currentUser);
           
           // Só busca o perfil se o usuário mudou ou ainda não foi carregado
           if (currentUser && profileLoadedRef.current !== currentUser.id) {
-            await fetchUserProfile(currentUser.id, currentUser);
+            // Chamada sem await para não bloquear o listener
+            fetchUserProfile(currentUser.id, currentUser);
           }
           setLoading(false);
         } else if (event === 'SIGNED_OUT') {
@@ -159,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshProfile = async () => {
     if (user) {
       profileLoadedRef.current = null;
-      await fetchUserProfile(user.id, user);
+      fetchUserProfile(user.id, user);
     }
   };
 
