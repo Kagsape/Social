@@ -21,7 +21,7 @@ import {
   Edit3,
   MapPin
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/components/AuthProvider';
 
@@ -53,7 +53,7 @@ const UserProfile = () => {
         const { data: postsData } = await supabase
           .from('posts')
           .select(`
-            id, content, created_at,
+            id, content, image_url, created_at,
             likes (user_id)
           `)
           .eq('user_id', id)
@@ -199,7 +199,21 @@ const UserProfile = () => {
               posts.map(post => (
                 <Card key={post.id} className="border-none shadow-sm bg-white dark:bg-slate-900 hover:shadow-md transition-shadow">
                   <CardContent className="p-6 space-y-4">
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                    {post.content && (
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                    )}
+                    
+                    {post.image_url && (
+                      <div className="rounded-xl overflow-hidden border bg-muted/30">
+                        <img 
+                          src={post.image_url} 
+                          alt="Post content" 
+                          className="w-full h-auto max-h-[400px] object-contain mx-auto"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between pt-4 border-t text-xs text-muted-foreground">
                       <div className="flex items-center gap-4">
                         <span className="flex items-center gap-1"><Heart className="h-3 w-3 fill-red-500 text-red-500" /> {post.likes_count}</span>

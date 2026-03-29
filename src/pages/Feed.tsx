@@ -29,6 +29,9 @@ const Feed = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
+  
+  // Estados para imagem
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,6 +49,7 @@ const Feed = () => {
         .select(`
           id,
           content,
+          image_url,
           created_at,
           user_id,
           users (id, name, avatar_url, role),
@@ -92,6 +96,11 @@ const Feed = () => {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        showError('A imagem deve ter no máximo 5MB');
+        return;
+      }
+      setSelectedFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -100,60 +109,52 @@ const Feed = () => {
     }
   };
 
+  const uploadImage = async (file: File) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `${user!.id}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('posts')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('posts')
+      .getPublicUrl(filePath);
+
+    return publicUrl;
+  };
+
   const createPost = async () => {
-    if (!newPost.trim() || !user) return;
+    if (!newPost.trim() && !selectedFile) return;
+    if (!user) return;
     
-    const content = newPost.trim();
-    const tempId = `temp-${Date.now()}`;
-    
-    // Objeto otimista para exibição imediata
-    const optimisticPost = {
-      id: tempId,
-      content: content,
-      created_at: new Date().toISOString(),
-      user_id: user.id,
-      users: {
-        id: user.id,
-        name: userProfile?.name,
-        avatar_url: userProfile?.avatar_url,
-        role: userProfile?.role
-      },
-      likes_count: 0,
-      has_liked: false,
-      isOptimistic: true
-    };
-
-    // Atualiza estado local instantaneamente
-    setPosts(prev => [optimisticPost, ...prev]);
-    setNewPost('');
-    setImagePreview(null);
     setSubmitting(true);
-
     try {
-      const { data, error } = await supabase
+      let imageUrl = null;
+      if (selectedFile) {
+        imageUrl = await uploadImage(selectedFile);
+      }
+
+      const { error } = await supabase
         .from('posts')
         .insert({
-          content: content,
+          content: newPost.trim(),
+          image_url: imageUrl,
           user_id: user.id
-        })
-        .select(`
-          id,
-          content,
-          created_at,
-          user_id,
-          users (id, name, avatar_url, role)
-        `)
-        .single();
+        });
 
       if (error) throw error;
 
-      // Substitui o post otimista pelo real (com ID correto do banco)
-      setPosts(prev => prev.map(p => p.id === tempId ? { ...data, likes_count: 0, has_liked: false } : p));
       showSuccess('Post publicado com sucesso!');
+      setNewPost('');
+      setSelectedFile(null);
+      setImagePreview(null);
+      fetchPosts(true);
     } catch (error: any) {
-      // Rollback: remove o post otimista e restaura o texto se falhar
-      setPosts(prev => prev.filter(p => p.id !== tempId));
-      setNewPost(content);
+      console.error('Erro ao criar post:', error);
       showError('Erro ao publicar seu post.');
     } finally {
       setSubmitting(false);
@@ -254,7 +255,10 @@ const Feed = () => {
                       variant="destructive" 
                       size="icon" 
                       className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg"
-                      onClick={() => setImagePreview(null)}
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setImagePreview(null);
+                      }}
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -281,7 +285,7 @@ const Feed = () => {
                   </div>
                   <Button 
                     onClick={createPost} 
-                    disabled={!newPost.trim() || submitting}
+                    disabled={(!newPost.trim() && !selectedFile) || submitting}
                     className="rounded-full px-6 font-semibold shadow-sm transition-all active:scale-95"
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Publicar'}
@@ -299,10 +303,7 @@ const Feed = () => {
             <EmptyFeed />
           ) : (
             posts.map(post => (
-              <Card key={post.id} className={cn(
-                "border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-bottom-2",
-                post.isOptimistic && "opacity-70 grayscale-[0.5]"
-              )}>
+              <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-bottom-2">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -324,7 +325,7 @@ const Feed = () => {
                         </p>
                       </div>
                     </div>
-                    {(post.user_id === user?.id || hasPermission('delete_any_post')) && !post.isOptimistic && (
+                    {(post.user_id === user?.id || hasPermission('delete_any_post')) && (
                       <Button 
                         variant="ghost" 
                         size="icon" 
@@ -338,27 +339,39 @@ const Feed = () => {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{post.content}</p>
+                  {post.content && (
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">
+                      {post.content}
+                    </p>
+                  )}
+                  
+                  {post.image_url && (
+                    <div className="rounded-xl overflow-hidden border bg-muted/30">
+                      <img 
+                        src={post.image_url} 
+                        alt="Post content" 
+                        className="w-full h-auto max-h-[500px] object-contain mx-auto"
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-6 pt-4 border-t">
                     <button 
-                      onClick={() => !post.isOptimistic && toggleLike(post)} 
-                      disabled={post.isOptimistic}
+                      onClick={() => toggleLike(post)} 
                       className={cn(
                         "flex items-center gap-2 text-sm transition-all active:scale-125", 
-                        post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500",
-                        post.isOptimistic && "cursor-not-allowed opacity-50"
+                        post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
                       )}
                     >
                       <Heart className={cn("h-5 w-5 transition-transform", post.has_liked && "fill-current scale-110")} />
                       <span className="font-bold">{post.likes_count}</span>
                     </button>
                     <button 
-                      onClick={() => !post.isOptimistic && setActiveComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))} 
-                      disabled={post.isOptimistic}
+                      onClick={() => setActiveComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))} 
                       className={cn(
                         "flex items-center gap-2 text-sm transition-colors", 
-                        activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary",
-                        post.isOptimistic && "cursor-not-allowed opacity-50"
+                        activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary"
                       )}
                     >
                       <MessageSquare className="h-5 w-5" />
@@ -366,11 +379,7 @@ const Feed = () => {
                     </button>
                     <button 
                       onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/feed#post-${post.id}`); showSuccess('Link copiado!'); }} 
-                      disabled={post.isOptimistic}
-                      className={cn(
-                        "flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors",
-                        post.isOptimistic && "cursor-not-allowed opacity-50"
-                      )}
+                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
                     >
                       <Share2 className="h-5 w-5" />
                       <span className="font-medium">Compartilhar</span>
