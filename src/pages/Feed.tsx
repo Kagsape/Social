@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +18,33 @@ import { cn } from '@/lib/utils';
 import CommentSection from '@/components/CommentSection';
 import AnnouncementList from '@/components/AnnouncementList';
 import { Link } from 'react-router-dom';
+
+const FeedSkeleton = () => (
+  <div className="space-y-4">
+    {[1, 2, 3].map((i) => (
+      <Card key={i} className="border-none shadow-sm bg-white dark:bg-slate-900">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+          <div className="flex gap-6 pt-4 border-t">
+            <Skeleton className="h-5 w-12" />
+            <Skeleton className="h-5 w-12" />
+            <Skeleton className="h-5 w-12" />
+          </div>
+        </CardContent>
+      </Card>
+    ))}
+  </div>
+);
 
 const Feed = () => {
   const { user, userProfile, loading: authLoading, hasPermission } = useAuth();
@@ -31,7 +59,6 @@ const Feed = () => {
   const fetchingRef = useRef(false);
 
   const fetchPosts = useCallback(async (isSilent = false) => {
-    // Trava para evitar chamadas simultâneas
     if (fetchingRef.current || !user?.id) return;
     
     fetchingRef.current = true;
@@ -77,7 +104,6 @@ const Feed = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    // Só executa se a autenticação terminou, o usuário existe, o perfil está carregado e ainda não inicializamos
     if (!authLoading && user?.id && userProfile && !initializedRef.current) {
       initializedRef.current = true;
       fetchPosts();
@@ -111,6 +137,18 @@ const Feed = () => {
   const toggleLike = async (postId: string, hasLiked: boolean) => {
     if (!user) return;
 
+    // Atualização otimista para UX instantânea
+    setPosts(prev => prev.map(p => {
+      if (p.id === postId) {
+        return {
+          ...p,
+          has_liked: !hasLiked,
+          likes_count: hasLiked ? p.likes_count - 1 : p.likes_count + 1
+        };
+      }
+      return p;
+    }));
+
     try {
       if (hasLiked) {
         await supabase
@@ -123,18 +161,9 @@ const Feed = () => {
           .from('likes')
           .insert({ post_id: postId, user_id: user.id });
       }
-      // Atualização local para evitar re-fetch imediato e concorrência
-      setPosts(prev => prev.map(p => {
-        if (p.id === postId) {
-          return {
-            ...p,
-            has_liked: !hasLiked,
-            likes_count: hasLiked ? p.likes_count - 1 : p.likes_count + 1
-          };
-        }
-        return p;
-      }));
     } catch (error: any) {
+      // Reverte em caso de erro
+      fetchPosts(true);
       showError('Erro ao processar curtida.');
     }
   };
@@ -159,9 +188,9 @@ const Feed = () => {
   if (authLoading) {
     return (
       <Layout>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-muted-foreground">Carregando seu feed...</p>
+        <div className="max-w-2xl mx-auto space-y-6">
+          <Skeleton className="h-32 w-full rounded-xl" />
+          <FeedSkeleton />
         </div>
       </Layout>
     );
@@ -174,10 +203,11 @@ const Feed = () => {
 
         {error && (
           <Card className="border-destructive/50 bg-destructive/5">
-            <CardContent className="p-4 flex flex-col items-center gap-3 text-destructive">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5" />
-                <p className="text-sm font-medium">Erro ao carregar feed</p>
+            <CardContent className="p-6 flex flex-col items-center gap-3 text-destructive text-center">
+              <AlertCircle className="h-10 w-10 opacity-50" />
+              <div className="space-y-1">
+                <p className="font-bold">Ops! Algo deu errado.</p>
+                <p className="text-sm opacity-80">{error}</p>
               </div>
               <Button variant="outline" size="sm" onClick={() => fetchPosts()} className="mt-2 gap-2">
                 <RefreshCw className="h-3 w-3" /> Tentar Novamente
@@ -224,10 +254,7 @@ const Feed = () => {
 
         <div className="space-y-4">
           {loading && posts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <Loader2 className="h-8 w-8 animate-spin text-primary/50" />
-              <p className="text-sm text-muted-foreground">Buscando posts...</p>
-            </div>
+            <FeedSkeleton />
           ) : posts.length === 0 ? (
             <Card className="border-none shadow-sm">
               <CardContent className="py-16 text-center space-y-2">

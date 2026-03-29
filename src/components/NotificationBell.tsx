@@ -22,13 +22,13 @@ const NotificationBell = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [hasTable, setHasTable] = useState(true);
 
   const fetchNotifications = async () => {
     if (!user) return;
 
     setLoading(true);
     try {
+      // Nota: Esta tabela 'notifications' precisará ser criada no Supabase
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
@@ -36,16 +36,10 @@ const NotificationBell = () => {
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (error) {
-        if (error.code === '42P01') { // Tabela não existe
-          setHasTable(false);
-        }
-        throw error;
-      }
+      if (error) throw error;
 
       setNotifications(data || []);
       setUnreadCount(data?.filter(n => !n.is_read).length || 0);
-      setHasTable(true);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -53,76 +47,32 @@ const NotificationBell = () => {
     }
   };
 
-  const markAsRead = async (notificationId: string) => {
-    try {
-      await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId);
-      
-      setNotifications(prev => 
-        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
-      );
-      setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
-  };
-
-  const markAllAsRead = async () => {
-    if (!user) return;
-
-    try {
-      await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
-
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-      setUnreadCount(0);
-    } catch (error) {
-      console.error('Error marking all as read:', error);
-    }
-  };
-
   useEffect(() => {
     if (user) {
       fetchNotifications();
+      
+      // Real-time subscription
+      const channel = supabase
+        .channel('notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user?.id}`
+          },
+          () => {
+            fetchNotifications();
+          }
+        )
+        .subscribe();
 
-      // Só tenta assinar se a tabela existir
-      if (hasTable) {
-        const channel = supabase
-          .channel('notifications')
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'notifications',
-              filter: `user_id=eq.${user?.id}`
-            },
-            () => {
-              fetchNotifications();
-            }
-          )
-          .subscribe();
-
-        return () => {
-          supabase.removeChannel(channel);
-        };
-      }
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
-  }, [user, hasTable]);
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'success': return '✅';
-      case 'warning': return '⚠️';
-      case 'error': return '❌';
-      default: return 'ℹ️';
-    }
-  };
+  }, [user]);
 
   return (
     <DropdownMenu>
@@ -140,52 +90,20 @@ const NotificationBell = () => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
-        <DropdownMenuLabel className="flex justify-between items-center">
-          <span>Notificações</span>
-          {unreadCount > 0 && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={markAllAsRead}
-              className="text-xs h-7"
-            >
-              Marcar todas como lidas
-            </Button>
-          )}
-        </DropdownMenuLabel>
+        <DropdownMenuLabel>Notificações</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        
-        {!hasTable ? (
-          <div className="p-4 text-center text-xs text-muted-foreground">
-            Sistema de notificações indisponível (tabela ausente).
-          </div>
-        ) : loading ? (
-          <div className="p-4 text-center text-sm text-muted-foreground">
-            Carregando...
-          </div>
+        {loading ? (
+          <div className="p-4 text-center text-sm text-muted-foreground">Carregando...</div>
         ) : notifications.length === 0 ? (
-          <div className="p-4 text-center text-sm text-muted-foreground">
-            Nenhuma notificação
-          </div>
+          <div className="p-4 text-center text-sm text-muted-foreground">Nenhuma notificação</div>
         ) : (
           notifications.map(notification => (
-            <DropdownMenuItem
-              key={notification.id}
-              className={`p-3 cursor-pointer ${!notification.is_read ? 'bg-muted/50' : ''}`}
-              onClick={() => markAsRead(notification.id)}
-            >
-              <div className="space-y-1 w-full">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-medium">{getTypeIcon(notification.type)} {notification.title}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {formatDistanceToNow(new Date(notification.created_at), { 
-                      addSuffix: true, 
-                      locale: ptBR 
-                    })}
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {notification.message}
+            <DropdownMenuItem key={notification.id} className="p-3 cursor-pointer">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{notification.title}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">{notification.message}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true, locale: ptBR })}
                 </p>
               </div>
             </DropdownMenuItem>
