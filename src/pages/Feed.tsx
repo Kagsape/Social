@@ -7,7 +7,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2, AlertCircle, RefreshCw, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,34 +16,9 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import CommentSection from '@/components/CommentSection';
 import AnnouncementList from '@/components/AnnouncementList';
+import FeedSkeleton from '@/components/FeedSkeleton';
+import EmptyFeed from '@/components/EmptyFeed';
 import { Link } from 'react-router-dom';
-
-const FeedSkeleton = () => (
-  <div className="space-y-4">
-    {[1, 2, 3].map((i) => (
-      <Card key={i} className="border-none shadow-sm bg-white dark:bg-slate-900">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <Skeleton className="h-10 w-10 rounded-full" />
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-3 w-16" />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
-          <div className="flex gap-6 pt-4 border-t">
-            <Skeleton className="h-5 w-12" />
-            <Skeleton className="h-5 w-12" />
-            <Skeleton className="h-5 w-12" />
-          </div>
-        </CardContent>
-      </Card>
-    ))}
-  </div>
-);
 
 const Feed = () => {
   const { user, userProfile, loading: authLoading, hasPermission } = useAuth();
@@ -52,6 +26,7 @@ const Feed = () => {
   const [newPost, setNewPost] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -90,7 +65,7 @@ const Feed = () => {
       setError(null);
     } catch (err: any) {
       console.error('[Feed] Erro ao buscar posts:', err);
-      setError('Erro ao carregar o feed.');
+      setError('Não foi possível carregar o feed no momento.');
     } finally {
       setLoading(false);
       fetchingRef.current = false;
@@ -101,7 +76,6 @@ const Feed = () => {
     if (!authLoading && user?.id) {
       fetchPosts();
 
-      // Real-time subscription para posts
       const channel = supabase
         .channel('feed_changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
@@ -140,11 +114,11 @@ const Feed = () => {
 
       if (error) throw error;
 
-      showSuccess('Post publicado!');
+      showSuccess('Post publicado com sucesso!');
       setNewPost('');
       setImagePreview(null);
     } catch (error: any) {
-      showError('Erro ao publicar.');
+      showError('Erro ao publicar seu post.');
     } finally {
       setSubmitting(false);
     }
@@ -154,7 +128,6 @@ const Feed = () => {
     if (!user) return;
     const hasLiked = post.has_liked;
 
-    // Atualização otimista
     setPosts(prev => prev.map(p => {
       if (p.id === post.id) {
         return {
@@ -172,7 +145,6 @@ const Feed = () => {
       } else {
         await supabase.from('likes').insert({ post_id: post.id, user_id: user.id });
         
-        // Criar notificação se não for o próprio post
         if (post.user_id !== user.id) {
           await supabase.from('notifications').insert({
             user_id: post.user_id,
@@ -190,12 +162,18 @@ const Feed = () => {
 
   const deletePost = async (postId: string) => {
     if (!confirm('Tem certeza que deseja excluir este post?')) return;
+    
+    setDeletingId(postId);
     try {
       const { error } = await supabase.from('posts').delete().eq('id', postId);
       if (error) throw error;
-      showSuccess('Post removido.');
+      
+      setPosts(prev => prev.filter(p => p.id !== postId));
+      showSuccess('Post removido com sucesso.');
     } catch (error: any) {
       showError('Erro ao excluir post.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -281,6 +259,8 @@ const Feed = () => {
         <div className="space-y-4">
           {loading && posts.length === 0 ? (
             <FeedSkeleton />
+          ) : posts.length === 0 ? (
+            <EmptyFeed />
           ) : (
             posts.map(post => (
               <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900">
@@ -306,8 +286,14 @@ const Feed = () => {
                       </div>
                     </div>
                     {(post.user_id === user?.id || hasPermission('delete_any_post')) && (
-                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive rounded-full" onClick={() => deletePost(post.id)}>
-                        <Trash2 className="h-4 w-4" />
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="text-muted-foreground hover:text-destructive rounded-full" 
+                        onClick={() => deletePost(post.id)}
+                        disabled={deletingId === post.id}
+                      >
+                        {deletingId === post.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </Button>
                     )}
                   </div>
