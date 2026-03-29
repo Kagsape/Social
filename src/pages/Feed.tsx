@@ -208,16 +208,16 @@ const Feed = () => {
                   placeholder={`No que você está pensando, ${userProfile?.name?.split(' ')[0]}?`}
                   value={newPost}
                   onChange={(e) => setNewPost(e.target.value)}
-                  className="min-h-[100px] resize-none border-none focus-visible:ring-0 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4"
+                  className="min-h-[100px] resize-none border-none focus-visible:ring-0 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 transition-all focus:bg-white dark:focus:bg-slate-800"
                 />
                 
                 {imagePreview && (
-                  <div className="relative rounded-xl overflow-hidden border">
+                  <div className="relative rounded-xl overflow-hidden border animate-in zoom-in-95 duration-200">
                     <img src={imagePreview} alt="Preview" className="w-full h-auto max-h-80 object-cover" />
                     <Button 
                       variant="destructive" 
                       size="icon" 
-                      className="absolute top-2 right-2 h-8 w-8 rounded-full"
+                      className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg"
                       onClick={() => setImagePreview(null)}
                     >
                       <X className="h-4 w-4" />
@@ -237,7 +237,7 @@ const Feed = () => {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="rounded-full gap-2 text-muted-foreground hover:text-primary"
+                      className="rounded-full gap-2 text-muted-foreground hover:text-primary hover:bg-primary/5"
                       onClick={() => fileInputRef.current?.click()}
                     >
                       <ImageIcon className="h-4 w-4" /> Foto
@@ -246,7 +246,7 @@ const Feed = () => {
                   <Button 
                     onClick={createPost} 
                     disabled={!newPost.trim() || submitting}
-                    className="rounded-full px-6 font-semibold"
+                    className="rounded-full px-6 font-semibold shadow-sm transition-all active:scale-95"
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Publicar'}
                   </Button>
@@ -263,7 +263,7 @@ const Feed = () => {
             <EmptyFeed />
           ) : (
             posts.map(post => (
-              <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900">
+              <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-bottom-2">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -289,7 +289,7 @@ const Feed = () => {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="text-muted-foreground hover:text-destructive rounded-full" 
+                        className="text-muted-foreground hover:text-destructive rounded-full transition-colors" 
                         onClick={() => deletePost(post.id)}
                         disabled={deletingId === post.id}
                       >
@@ -301,15 +301,30 @@ const Feed = () => {
                 <CardContent className="space-y-4">
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">{post.content}</p>
                   <div className="flex items-center gap-6 pt-4 border-t">
-                    <button onClick={() => toggleLike(post)} className={cn("flex items-center gap-2 text-sm transition-all", post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500")}>
-                      <Heart className={cn("h-5 w-5", post.has_liked && "fill-current")} />
+                    <button 
+                      onClick={() => toggleLike(post)} 
+                      className={cn(
+                        "flex items-center gap-2 text-sm transition-all active:scale-125", 
+                        post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
+                      )}
+                    >
+                      <Heart className={cn("h-5 w-5 transition-transform", post.has_liked && "fill-current scale-110")} />
                       <span className="font-bold">{post.likes_count}</span>
                     </button>
-                    <button onClick={() => setActiveComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))} className={cn("flex items-center gap-2 text-sm transition-colors", activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary")}>
+                    <button 
+                      onClick={() => setActiveComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))} 
+                      className={cn(
+                        "flex items-center gap-2 text-sm transition-colors", 
+                        activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary"
+                      )}
+                    >
                       <MessageSquare className="h-5 w-5" />
                       <span className="font-medium">Comentar</span>
                     </button>
-                    <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/feed#post-${post.id}`); showSuccess('Link copiado!'); }} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
+                    <button 
+                      onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/feed#post-${post.id}`); showSuccess('Link copiado!'); }} 
+                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+                    >
                       <Share2 className="h-5 w-5" />
                       <span className="font-medium">Compartilhar</span>
                     </button>
