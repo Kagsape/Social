@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthProvider';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Send, ArrowLeft } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
@@ -23,7 +23,23 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const channelRef = useRef<any>(null);
+
+  const fetchOtherUser = useCallback(async () => {
+    if (!conversationId || !user) return;
+    
+    const { data: participant } = await supabase
+      .from('conversation_participants')
+      .select('users (*)')
+      .eq('conversation_id', conversationId)
+      .neq('user_id', user.id)
+      .single();
+    
+    if (participant) setOtherUser((participant as any).users);
+  }, [conversationId, user]);
 
   useEffect(() => {
     if (!conversationId || !user) return;
@@ -31,17 +47,8 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // 1. Buscar outro participante
-        const { data: participant } = await supabase
-          .from('conversation_participants')
-          .select('users (id, name, avatar_url)')
-          .eq('conversation_id', conversationId)
-          .neq('user_id', user.id)
-          .single();
-        
-        setOtherUser((participant as any)?.users);
+        await fetchOtherUser();
 
-        // 2. Buscar mensagens
         const { data: msgs } = await supabase
           .from('messages')
           .select('*')
@@ -58,7 +65,7 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
 
     fetchData();
 
-    // Realtime para novas mensagens
+    // Canal para mensagens e broadcast de "digitando"
     const channel = supabase
       .channel(`chat-${conversationId}`)
       .on('postgres_changes', { 
@@ -69,18 +76,56 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
       }, (payload) => {
         setMessages(prev => [...prev, payload.new]);
       })
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        if (payload.payload.userId !== user.id) {
+          setIsOtherTyping(payload.payload.isTyping);
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'users'
+      }, (payload) => {
+        if (otherUser && payload.new.id === otherUser.id) {
+          setOtherUser(payload.new);
+        }
+      })
       .subscribe();
+
+    channelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId, user]);
+  }, [conversationId, user, fetchOtherUser, otherUser?.id]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isOtherTyping]);
+
+  const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { userId: user?.id, isTyping: true }
+      });
+
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+      typingTimeoutRef.current = setTimeout(() => {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: { userId: user?.id, isTyping: false }
+        });
+      }, 2000);
+    }
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,11 +143,19 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
 
       if (error) throw error;
 
-      // Atualizar timestamp da conversa
       await supabase
         .from('conversations')
         .update({ last_message_at: new Date().toISOString() })
         .eq('id', conversationId);
+
+      // Parar de digitar imediatamente ao enviar
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: { userId: user.id, isTyping: false }
+        });
+      }
 
       setNewMessage('');
     } catch (error) {
@@ -123,13 +176,25 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
             <ArrowLeft className="h-5 w-5" />
           </Button>
         )}
-        <Avatar className="h-10 w-10">
-          <AvatarImage src={otherUser?.avatar_url} />
-          <AvatarFallback>{otherUser?.name?.charAt(0)}</AvatarFallback>
-        </Avatar>
+        <div className="relative">
+          <Avatar className="h-10 w-10">
+            <AvatarImage src={otherUser?.avatar_url} />
+            <AvatarFallback>{otherUser?.name?.charAt(0)}</AvatarFallback>
+          </Avatar>
+          {otherUser?.is_online && (
+            <span className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
+          )}
+        </div>
         <div>
           <h3 className="font-bold text-sm">{otherUser?.name}</h3>
-          <p className="text-[10px] text-green-500 font-medium">Online</p>
+          <p className={cn(
+            "text-[10px] font-medium",
+            otherUser?.is_online ? "text-green-500" : "text-muted-foreground"
+          )}>
+            {otherUser?.is_online ? 'Online agora' : (
+              otherUser?.last_seen ? `Visto ${formatDistanceToNow(new Date(otherUser.last_seen), { addSuffix: true, locale: ptBR })}` : 'Offline'
+            )}
+          </p>
         </div>
       </div>
 
@@ -162,6 +227,17 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
             </div>
           );
         })}
+        
+        {isOtherTyping && (
+          <div className="flex items-center gap-2 text-muted-foreground animate-pulse">
+            <div className="flex gap-1">
+              <span className="h-1.5 w-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="h-1.5 w-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="h-1.5 w-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span className="text-[10px] font-medium">{otherUser?.name?.split(' ')[0]} está digitando...</span>
+          </div>
+        )}
       </div>
 
       {/* Input */}
@@ -169,7 +245,7 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
         <Input
           placeholder="Digite sua mensagem..."
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={handleTyping}
           className="rounded-full bg-muted border-none focus-visible:ring-1"
         />
         <Button type="submit" size="icon" className="rounded-full shrink-0" disabled={!newMessage.trim() || sending}>

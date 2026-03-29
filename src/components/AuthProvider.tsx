@@ -24,10 +24,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
   
-  // Travas de controle absoluto
   const initializedRef = useRef(false);
-  const profileLoadingRef = useRef<string | null>(null); // ID do usuário sendo carregado
-  const profileLoadedRef = useRef<string | null>(null);  // ID do usuário já carregado no estado
+  const profileLoadingRef = useRef<string | null>(null);
+  const profileLoadedRef = useRef<string | null>(null);
+
+  const updateOnlineStatus = useCallback(async (userId: string, isOnline: boolean) => {
+    try {
+      await supabase
+        .from('users')
+        .update({ 
+          is_online: isOnline, 
+          last_seen: new Date().toISOString() 
+        })
+        .eq('id', userId);
+    } catch (err) {
+      console.error('[Auth] Erro ao atualizar status online:', err);
+    }
+  }, []);
 
   const hasPermission = (permission: string) => {
     if (user?.email === CHIEF_ADMIN_EMAIL) return true;
@@ -36,7 +49,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
-    // Bloqueia se já estiver carregando este usuário ou se ele já estiver carregado
     if (profileLoadingRef.current === userId || profileLoadedRef.current === userId) {
       return;
     }
@@ -44,8 +56,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     profileLoadingRef.current = userId;
     
     try {
-      console.log('[Auth] fetchUserProfile iniciado para:', userId);
-      
       const { data: profile, error } = await supabase
         .from('users')
         .select('*')
@@ -57,7 +67,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let finalProfile = profile;
 
       if (!profile) {
-        console.log('[Auth] Perfil não encontrado, criando novo para:', userId);
         const { data: newProfile, error: createError } = await supabase
           .from('users')
           .upsert({
@@ -85,23 +94,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           finalProfile.role = 'admin';
         }
         
-        // Marca como carregado ANTES de atualizar o estado para evitar race conditions
         profileLoadedRef.current = userId;
         setUserProfile(finalProfile);
+        
+        // Marcar como online ao carregar perfil
+        updateOnlineStatus(userId, true);
       }
     } catch (err) {
       console.error('[Auth] Erro ao carregar perfil:', err);
     } finally {
       profileLoadingRef.current = null;
     }
-  }, []);
+  }, [updateOnlineStatus]);
 
   useEffect(() => {
-    // Garante que o efeito de inicialização rode apenas uma vez
     if (initializedRef.current) return;
     initializedRef.current = true;
-
-    console.log('[Auth] Inicializando AuthProvider...');
 
     const initialize = async () => {
       try {
@@ -109,7 +117,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (initialSession) {
           setSession(initialSession);
           setUser(initialSession.user);
-          // REMOVIDO: fetchUserProfile não deve ser chamado aqui para evitar concorrência
         }
       } catch (error) {
         console.error('[Auth] Erro ao obter sessão inicial:', error);
@@ -122,21 +129,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
-        console.log('[Auth] onAuthStateChange:', event);
-        
         const currentUser = currentSession?.user ?? null;
         
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
           setSession(currentSession);
           setUser(currentUser);
           
-          // Só busca o perfil se o usuário mudou ou ainda não foi carregado
           if (currentUser && profileLoadedRef.current !== currentUser.id) {
-            // Chamada sem await para não bloquear o listener
             fetchUserProfile(currentUser.id, currentUser);
           }
           setLoading(false);
         } else if (event === 'SIGNED_OUT') {
+          if (user) updateOnlineStatus(user.id, false);
           setSession(null);
           setUser(null);
           setUserProfile(null);
@@ -147,12 +151,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
+    // Gerenciar status online ao fechar a aba ou mudar visibilidade
+    const handleVisibilityChange = () => {
+      if (user) {
+        updateOnlineStatus(user.id, document.visibilityState === 'visible');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchUserProfile]);
+  }, [fetchUserProfile, updateOnlineStatus, user]);
 
   const signOut = async () => {
+    if (user) await updateOnlineStatus(user.id, false);
     setLoading(true);
     await supabase.auth.signOut();
   };

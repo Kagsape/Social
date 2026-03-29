@@ -21,7 +21,8 @@ import {
   Edit3,
   MapPin,
   UserPlus,
-  UserMinus
+  UserMinus,
+  Clock
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -46,7 +47,6 @@ const UserProfile = () => {
     const fetchProfileData = async () => {
       setLoading(true);
       try {
-        // 1. Buscar Perfil
         const { data: profileData, error: profileError } = await supabase
           .from('users')
           .select('*')
@@ -56,7 +56,6 @@ const UserProfile = () => {
         if (profileError) throw profileError;
         setProfile(profileData);
 
-        // 2. Buscar Posts do Usuário
         const { data: postsData } = await supabase
           .from('posts')
           .select(`
@@ -73,7 +72,6 @@ const UserProfile = () => {
         
         setPosts(processedPosts);
 
-        // 3. Buscar Seguidores e Seguindo
         const { count: followersCount } = await supabase
           .from('follows')
           .select('*', { count: 'exact', head: true })
@@ -84,7 +82,6 @@ const UserProfile = () => {
           .select('*', { count: 'exact', head: true })
           .eq('follower_id', id);
 
-        // 4. Verificar se o usuário atual segue este perfil
         if (currentUser && currentUser.id !== id) {
           const { data: followData } = await supabase
             .from('follows')
@@ -96,7 +93,6 @@ const UserProfile = () => {
           setIsFollowing(!!followData);
         }
 
-        // 5. Calcular Estatísticas
         const totalLikes = processedPosts.reduce((acc, post) => acc + post.likes_count, 0);
         setStats({
           posts: processedPosts.length,
@@ -113,6 +109,23 @@ const UserProfile = () => {
     };
 
     fetchProfileData();
+
+    // Realtime para status online no perfil
+    const channel = supabase
+      .channel(`profile-${id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'users',
+        filter: `id=eq.${id}`
+      }, (payload) => {
+        setProfile(payload.new);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [id, currentUser]);
 
   const handleFollowToggle = async () => {
@@ -141,7 +154,6 @@ const UserProfile = () => {
             following_id: id
           });
         
-        // Notificar o usuário
         await supabase.from('notifications').insert({
           user_id: id,
           actor_id: currentUser.id,
@@ -168,7 +180,6 @@ const UserProfile = () => {
 
     setChatLoading(true);
     try {
-      // 1. Verificar se já existe uma conversa entre os dois
       const { data: existingParticipants } = await supabase
         .from('conversation_participants')
         .select('conversation_id')
@@ -190,7 +201,6 @@ const UserProfile = () => {
         }
       }
 
-      // 2. Criar nova conversa
       const { data: newConv, error: convError } = await supabase
         .from('conversations')
         .insert({})
@@ -199,7 +209,6 @@ const UserProfile = () => {
       
       if (convError) throw convError;
 
-      // 3. Adicionar participantes
       await supabase.from('conversation_participants').insert([
         { conversation_id: newConv.id, user_id: currentUser.id },
         { conversation_id: newConv.id, user_id: id }
@@ -244,17 +253,21 @@ const UserProfile = () => {
           <ArrowLeft className="h-4 w-4" /> Voltar
         </Button>
 
-        {/* Header do Perfil */}
         <Card className="border-none shadow-lg overflow-hidden bg-white dark:bg-slate-900">
           <div className="h-48 bg-gradient-to-r from-primary via-indigo-600 to-blue-500"></div>
           <CardContent className="relative pt-0 pb-8">
             <div className="flex flex-col md:flex-row items-center md:items-end gap-6 -mt-16 px-4">
-              <Avatar className="h-32 w-32 border-4 border-white dark:border-slate-900 shadow-2xl">
-                <AvatarImage src={profile.avatar_url} />
-                <AvatarFallback className="text-5xl bg-primary text-primary-foreground">
-                  {profile.name?.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="h-32 w-32 border-4 border-white dark:border-slate-900 shadow-2xl">
+                  <AvatarImage src={profile.avatar_url} />
+                  <AvatarFallback className="text-5xl bg-primary text-primary-foreground">
+                    {profile.name?.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+                {profile.is_online && (
+                  <span className="absolute bottom-2 right-2 h-6 w-6 bg-green-500 border-4 border-white dark:border-slate-900 rounded-full" />
+                )}
+              </div>
               
               <div className="flex-1 text-center md:text-left space-y-2 pb-2">
                 <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
@@ -268,7 +281,11 @@ const UserProfile = () => {
                 </div>
                 <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1"><Mail className="h-4 w-4" /> {profile.email}</span>
-                  {profile.location && <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {profile.location}</span>}
+                  {profile.is_online ? (
+                    <span className="flex items-center gap-1 text-green-600 font-bold"><span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" /> Online agora</span>
+                  ) : (
+                    profile.last_seen && <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> Visto {formatDistanceToNow(new Date(profile.last_seen), { addSuffix: true, locale: ptBR })}</span>
+                  )}
                   <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> Desde {format(new Date(profile.created_at), "MMM yyyy", { locale: ptBR })}</span>
                 </div>
               </div>
@@ -318,7 +335,6 @@ const UserProfile = () => {
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Sidebar de Stats */}
           <div className="space-y-6">
             <Card className="border-none shadow-sm bg-white dark:bg-slate-900">
               <CardHeader>
@@ -345,7 +361,6 @@ const UserProfile = () => {
             </Card>
           </div>
 
-          {/* Lista de Posts */}
           <div className="lg:col-span-2 space-y-4">
             <h2 className="text-xl font-bold px-1 flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />

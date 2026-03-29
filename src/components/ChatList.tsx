@@ -28,19 +28,16 @@ const ChatList = ({ onSelectConversation, selectedId }: ChatListProps) => {
           .from('conversation_participants')
           .select(`
             conversation_id,
-            conversations (id, last_message_at),
-            other_participant:users!conversation_participants_user_id_fkey (id, name, avatar_url)
+            conversations (id, last_message_at)
           `)
-          .eq('user_id', user.id)
-          .neq('other_participant.id', user.id); // Isso é um truque, precisamos filtrar no JS
+          .eq('user_id', user.id);
 
         if (error) throw error;
 
-        // Buscar os outros participantes manualmente para cada conversa
         const formatted = await Promise.all((data || []).map(async (item: any) => {
           const { data: other } = await supabase
             .from('conversation_participants')
-            .select('users (id, name, avatar_url)')
+            .select('users (*)')
             .eq('conversation_id', item.conversation_id)
             .neq('user_id', user.id)
             .single();
@@ -64,11 +61,18 @@ const ChatList = ({ onSelectConversation, selectedId }: ChatListProps) => {
 
     fetchConversations();
 
-    // Realtime para atualizar ordem das conversas
     const channel = supabase
-      .channel('conversations_updates')
+      .channel('conversations_list_updates')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, () => {
         fetchConversations();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users' }, (payload) => {
+        setConversations(prev => prev.map(conv => {
+          if (conv.other_user?.id === payload.new.id) {
+            return { ...conv, other_user: payload.new };
+          }
+          return conv;
+        }));
       })
       .subscribe();
 
@@ -99,10 +103,15 @@ const ChatList = ({ onSelectConversation, selectedId }: ChatListProps) => {
             selectedId === conv.id && "bg-muted"
           )}
         >
-          <Avatar className="h-12 w-12">
-            <AvatarImage src={conv.other_user?.avatar_url} />
-            <AvatarFallback>{conv.other_user?.name?.charAt(0)}</AvatarFallback>
-          </Avatar>
+          <div className="relative">
+            <Avatar className="h-12 w-12">
+              <AvatarImage src={conv.other_user?.avatar_url} />
+              <AvatarFallback>{conv.other_user?.name?.charAt(0)}</AvatarFallback>
+            </Avatar>
+            {conv.other_user?.is_online && (
+              <span className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
+            )}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-baseline">
               <h4 className="font-bold text-sm truncate">{conv.other_user?.name}</h4>
@@ -110,7 +119,12 @@ const ChatList = ({ onSelectConversation, selectedId }: ChatListProps) => {
                 {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: true, locale: ptBR })}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground truncate">Clique para ver as mensagens</p>
+            <p className={cn(
+              "text-xs truncate",
+              conv.other_user?.is_online ? "text-green-600 font-medium" : "text-muted-foreground"
+            )}>
+              {conv.other_user?.is_online ? 'Online agora' : 'Clique para ver as mensagens'}
+            </p>
           </div>
         </button>
       ))}
