@@ -24,10 +24,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
   
-  // Refs para controle absoluto de fluxo
+  // Travas de controle absoluto
   const initializedRef = useRef(false);
-  const lastFetchedUserIdRef = useRef<string | null>(null);
-  const isFetchingProfileRef = useRef(false);
+  const profileLoadingRef = useRef<string | null>(null); // ID do usuário sendo carregado
+  const profileLoadedRef = useRef<string | null>(null);  // ID do usuário já carregado no estado
 
   const hasPermission = (permission: string) => {
     if (user?.email === CHIEF_ADMIN_EMAIL) return true;
@@ -36,15 +36,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
-    // Se já estamos buscando ou se já buscamos este usuário, ignoramos
-    if (isFetchingProfileRef.current || (lastFetchedUserIdRef.current === userId && userProfile)) {
+    // Bloqueia se já estiver carregando este usuário ou se ele já estiver carregado
+    if (profileLoadingRef.current === userId || profileLoadedRef.current === userId) {
       return;
     }
 
-    isFetchingProfileRef.current = true;
+    profileLoadingRef.current = userId;
+    
     try {
       console.log('[Auth] fetchUserProfile iniciado para:', userId);
-      lastFetchedUserIdRef.current = userId;
       
       const { data: profile, error } = await supabase
         .from('users')
@@ -85,26 +85,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           finalProfile.role = 'admin';
         }
         
+        // Marca como carregado ANTES de atualizar o estado para evitar race conditions
+        profileLoadedRef.current = userId;
         setUserProfile(finalProfile);
       }
     } catch (err) {
       console.error('[Auth] Erro ao carregar perfil:', err);
-      lastFetchedUserIdRef.current = null;
     } finally {
-      isFetchingProfileRef.current = false;
+      profileLoadingRef.current = null;
     }
-  }, [userProfile]);
+  }, []); // Dependência vazia para manter a identidade estável
 
   useEffect(() => {
-    // Proteção contra execução dupla (StrictMode ou remounts rápidos)
+    // Garante que o efeito de inicialização rode apenas uma vez
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    console.log('[Auth] Inicializando AuthProvider (execução única)...');
+    console.log('[Auth] Inicializando AuthProvider...');
 
     const initialize = async () => {
       try {
-        // Chamada única ao getSession
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (initialSession) {
           setSession(initialSession);
@@ -120,17 +120,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initialize();
 
-    // Registro único do listener de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         console.log('[Auth] onAuthStateChange:', event);
         
+        const currentUser = currentSession?.user ?? null;
+        
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          const currentUser = currentSession?.user ?? null;
           setSession(currentSession);
           setUser(currentUser);
           
-          if (currentUser && lastFetchedUserIdRef.current !== currentUser.id) {
+          // Só busca o perfil se o usuário mudou ou ainda não foi carregado
+          if (currentUser && profileLoadedRef.current !== currentUser.id) {
             await fetchUserProfile(currentUser.id, currentUser);
           }
           setLoading(false);
@@ -138,16 +139,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSession(null);
           setUser(null);
           setUserProfile(null);
-          lastFetchedUserIdRef.current = null;
+          profileLoadedRef.current = null;
+          profileLoadingRef.current = null;
           setLoading(false);
         }
       }
     );
 
     return () => {
-      console.log('[Auth] Limpando subscrição de autenticação');
       subscription.unsubscribe();
-      initializedRef.current = false; // Permite reinicialização se o componente for realmente desmontado
     };
   }, [fetchUserProfile]);
 
@@ -158,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshProfile = async () => {
     if (user) {
-      lastFetchedUserIdRef.current = null;
+      profileLoadedRef.current = null;
       await fetchUserProfile(user.id, user);
     }
   };
