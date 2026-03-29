@@ -1,29 +1,19 @@
--- Habilitar RLS na tabela de posts (já feito, mas garantindo)
-ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
-
--- Políticas para POSTS
-CREATE POLICY "Anyone can view posts" ON posts FOR SELECT USING (true);
-CREATE POLICY "Authenticated users can create posts" ON posts FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update their own posts" ON posts FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete their own posts" ON posts FOR DELETE USING (auth.uid() = user_id);
-CREATE POLICY "Admins can delete any post" ON posts FOR DELETE USING (
-  EXISTS (SELECT 1 FROM users WHERE users.id = auth.uid() AND users.role = 'admin')
+-- Tabela de Notificações
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  actor_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL, -- 'like', 'comment', 'system'
+  post_id UUID REFERENCES posts(id) ON DELETE CASCADE,
+  message TEXT,
+  is_read BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Habilitar RLS na tabela de LIKES
-ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
+-- Habilitar RLS
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Anyone can view likes" ON likes FOR SELECT USING (true);
-CREATE POLICY "Authenticated users can like" ON likes FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can unlike their own likes" ON likes FOR DELETE USING (auth.uid() = user_id);
-
--- Habilitar RLS na tabela de COMMENTS
-ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Anyone can view comments" ON comments FOR SELECT USING (true);
-CREATE POLICY "Authenticated users can comment" ON comments FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update their own comments" ON comments FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete their own comments" ON comments FOR DELETE USING (auth.uid() = user_id);
-CREATE POLICY "Admins can delete any comment" ON comments FOR DELETE USING (
-  EXISTS (SELECT 1 FROM users WHERE users.id = auth.uid() AND users.role = 'admin')
-);
+-- Políticas para Notificações
+CREATE POLICY "Users can view their own notifications" ON notifications FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can update their own notifications" ON notifications FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "System can insert notifications" ON notifications FOR INSERT WITH CHECK (true);
