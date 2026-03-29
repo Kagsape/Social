@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Check, CheckCheck, Trash2 } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
