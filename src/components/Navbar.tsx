@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   Sun,
-  Moon
+  Moon,
+  MessageSquare
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -62,18 +63,21 @@ const Navbar = () => {
     if (userProfile.role === 'student') {
       roleBasedItems.push(
         { name: 'Feed', path: '/feed', icon: Users },
+        { name: 'Mensagens', path: '/messages', icon: MessageSquare },
         { name: 'Cursos', path: '/courses', icon: BookOpen },
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }
       );
     } else if (userProfile.role === 'teacher') {
       roleBasedItems.push(
         { name: 'Feed', path: '/feed', icon: Users },
+        { name: 'Mensagens', path: '/messages', icon: MessageSquare },
         { name: 'Cursos', path: '/courses', icon: BookOpen },
         { name: 'Painel', path: '/teacher', icon: LayoutDashboard }
       );
     } else if (userProfile.role === 'admin') {
       roleBasedItems.push(
         { name: 'Feed', path: '/feed', icon: Users },
+        { name: 'Mensagens', path: '/messages', icon: MessageSquare },
         { name: 'Admin', path: '/admin', icon: ShieldCheck },
         { name: 'Cursos', path: '/courses', icon: BookOpen },
         { name: 'Laboratório', path: '/admin/lab', icon: Monitor }

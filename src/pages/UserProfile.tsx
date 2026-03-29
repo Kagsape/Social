@@ -40,6 +40,7 @@ const UserProfile = () => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -159,6 +160,60 @@ const UserProfile = () => {
     }
   };
 
+  const handleStartChat = async () => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+
+    setChatLoading(true);
+    try {
+      // 1. Verificar se já existe uma conversa entre os dois
+      const { data: existingParticipants } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', currentUser.id);
+      
+      const convIds = (existingParticipants || []).map(p => p.conversation_id);
+
+      if (convIds.length > 0) {
+        const { data: commonConv } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .in('conversation_id', convIds)
+          .eq('user_id', id)
+          .maybeSingle();
+        
+        if (commonConv) {
+          navigate('/messages');
+          return;
+        }
+      }
+
+      // 2. Criar nova conversa
+      const { data: newConv, error: convError } = await supabase
+        .from('conversations')
+        .insert({})
+        .select()
+        .single();
+      
+      if (convError) throw convError;
+
+      // 3. Adicionar participantes
+      await supabase.from('conversation_participants').insert([
+        { conversation_id: newConv.id, user_id: currentUser.id },
+        { conversation_id: newConv.id, user_id: id }
+      ]);
+
+      navigate('/messages');
+    } catch (error) {
+      console.error('Erro ao iniciar chat:', error);
+      showError('Erro ao iniciar conversa.');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -226,16 +281,27 @@ const UserProfile = () => {
                     </Button>
                   </Link>
                 ) : (
-                  <Button 
-                    variant={isFollowing ? "outline" : "default"} 
-                    className={cn("gap-2 rounded-full px-6", isFollowing && "text-destructive hover:bg-destructive/10")}
-                    onClick={handleFollowToggle}
-                    disabled={followLoading}
-                  >
-                    {followLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
-                      isFollowing ? <><UserMinus className="h-4 w-4" /> Deixar de Seguir</> : <><UserPlus className="h-4 w-4" /> Seguir</>
-                    )}
-                  </Button>
+                  <>
+                    <Button 
+                      variant="outline" 
+                      className="gap-2 rounded-full"
+                      onClick={handleStartChat}
+                      disabled={chatLoading}
+                    >
+                      {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
+                      Mensagem
+                    </Button>
+                    <Button 
+                      variant={isFollowing ? "outline" : "default"} 
+                      className={cn("gap-2 rounded-full px-6", isFollowing && "text-destructive hover:bg-destructive/10")}
+                      onClick={handleFollowToggle}
+                      disabled={followLoading}
+                    >
+                      {followLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                        isFollowing ? <><UserMinus className="h-4 w-4" /> Deixar de Seguir</> : <><UserPlus className="h-4 w-4" /> Seguir</>
+                      )}
+                    </Button>
+                  </>
                 )}
               </div>
             </div>

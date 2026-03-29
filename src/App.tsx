@@ -23,6 +23,7 @@ import AdminUsersPage from "./pages/AdminUsersPage";
 import AdminRolesPage from "./pages/AdminRolesPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import ReservationsPage from "./pages/ReservationsPage";
+import Messages from "./pages/Messages";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 
@@ -45,6 +46,11 @@ const App = () => (
             <Route path="/feed" element={
               <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
                 <Feed />
+              </ProtectedRoute>
+            } />
+            <Route path="/messages" element={
+              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
+                <Messages />
               </ProtectedRoute>
             } />
             <Route path="/profile" element={
