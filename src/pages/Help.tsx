@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import {
   Accordion,
@@ -10,31 +10,32 @@ import {
 } from "@/components/ui/accordion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { HelpCircle, MessageCircle, Mail, Phone } from 'lucide-react';
+import { HelpCircle, MessageCircle, Mail, Phone, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Help = () => {
-  const faqs = [
-    {
-      question: "Como faço para me matricular em um curso?",
-      answer: "Basta acessar a página de Cursos, escolher o que mais te interessa e clicar no botão 'Matricular-se Agora'. Você precisa estar logado para isso."
-    },
-    {
-      question: "Como reservo um computador no laboratório?",
-      answer: "No seu Dashboard de Aluno, existe um formulário de reserva. Escolha o computador disponível, a data e o horário desejado."
-    },
-    {
-      question: "Esqueci minha senha, o que fazer?",
-      answer: "Na página de login, clique em 'Esqueci minha senha' ou procure o professor responsável na Sala de Informática para resetar seu acesso."
-    },
-    {
-      question: "Posso usar o laboratório fora do horário de aula?",
-      answer: "Sim, desde que haja um professor presente e você tenha feito a reserva prévia do computador pelo portal."
-    },
-    {
-      question: "Como ganho pontos no ranking?",
-      answer: "Você ganha pontos ao concluir cursos, participar de eventos, postar projetos na galeria e interagir de forma positiva no feed da comunidade."
-    }
-  ];
+  const [faqs, setFaqs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFaqs = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('faqs')
+          .select('*')
+          .order('created_at', { ascending: true });
+        
+        if (error) throw error;
+        setFaqs(data || []);
+      } catch (error) {
+        console.error('Erro ao buscar FAQs:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFaqs();
+  }, []);
 
   return (
     <Layout>
@@ -52,16 +53,26 @@ const Help = () => {
             <CardTitle>Perguntas Frequentes</CardTitle>
           </CardHeader>
           <CardContent>
-            <Accordion type="single" collapsible className="w-full">
-              {faqs.map((faq, i) => (
-                <AccordionItem key={i} value={`item-${i}`}>
-                  <AccordionTrigger className="text-left font-medium">{faq.question}</AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground leading-relaxed">
-                    {faq.answer}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : faqs.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Nenhuma pergunta frequente cadastrada.
+              </div>
+            ) : (
+              <Accordion type="single" collapsible className="w-full">
+                {faqs.map((faq, i) => (
+                  <AccordionItem key={faq.id} value={`item-${i}`}>
+                    <AccordionTrigger className="text-left font-medium">{faq.question}</AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground leading-relaxed">
+                      {faq.answer}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
           </CardContent>
         </Card>
 

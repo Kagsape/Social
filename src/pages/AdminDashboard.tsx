@@ -19,6 +19,8 @@ import {
   ResponsiveContainer,
   Cell
 } from 'recharts';
+import { format, subDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const AdminDashboard = () => {
   const { userProfile } = useAuth();
@@ -56,15 +58,30 @@ const AdminDashboard = () => {
         reservationsToday: reservationCount || 0
       });
 
-      // Dados fictícios para o gráfico (em um app real, viria de uma query de agregação)
-      setChartData([
-        { name: 'Seg', reservas: 12 },
-        { name: 'Ter', reservas: 19 },
-        { name: 'Qua', reservas: 15 },
-        { name: 'Qui', reservas: 22 },
-        { name: 'Sex', reservas: 30 },
-        { name: 'Sáb', reservas: 5 },
-      ]);
+      // Gerar dados reais para o gráfico baseados nas reservas dos últimos 7 dias
+      const last7Days = Array.from({ length: 7 }).map((_, i) => {
+        const date = subDays(new Date(), 6 - i);
+        return {
+          date: format(date, 'yyyy-MM-dd'),
+          name: format(date, 'EEE', { locale: ptBR }),
+          reservas: 0
+        };
+      });
+
+      const { data: recentReservations } = await supabase
+        .from('lab_usage')
+        .select('start_time')
+        .gte('start_time', last7Days[0].date);
+
+      if (recentReservations) {
+        recentReservations.forEach(res => {
+          const resDate = res.start_time.split('T')[0];
+          const dayData = last7Days.find(d => d.date === resDate);
+          if (dayData) dayData.reservas++;
+        });
+      }
+
+      setChartData(last7Days);
 
       const { data: computers } = await supabase
         .from('lab_computers')
@@ -155,7 +172,7 @@ const AdminDashboard = () => {
                   />
                   <Bar dataKey="reservas" radius={[4, 4, 0, 0]}>
                     {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={index === 4 ? '#2563eb' : '#94a3b8'} />
+                      <Cell key={`cell-${index}`} fill={index === 6 ? '#2563eb' : '#94a3b8'} />
                     ))}
                   </Bar>
                 </BarChart>
