@@ -5,13 +5,19 @@ import Layout from '@/components/Layout';
 import CourseCard from '@/components/CourseCard';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop, BookOpen } from 'lucide-react';
+import { Card, CardContent } from "@/components/ui/card";
+import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop, BookOpen, Monitor, CheckCircle2, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const [featuredCourses, setFeaturedCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [labStatus, setLabStatus] = useState({
+    isOpen: true,
+    freeMachines: 12,
+    totalMachines: 20
+  });
 
   useEffect(() => {
     const fetchFeaturedCourses = async () => {
@@ -38,6 +44,50 @@ const Index = () => {
 
   return (
     <Layout>
+      {/* Lab Status Widget */}
+      <div className="mb-8">
+        <Card className="bg-card/50 backdrop-blur-sm border-muted/60 overflow-hidden">
+          <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className={`p-2 rounded-full ${labStatus.isOpen ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                <Monitor className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-lg">Status do Laboratório</h3>
+                  {labStatus.isOpen ? (
+                    <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> Aberto
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 flex items-center gap-1">
+                      <XCircle className="h-3 w-3" /> Fechado
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {labStatus.isOpen
+                    ? `${labStatus.freeMachines} de ${labStatus.totalMachines} máquinas disponíveis para uso.`
+                    : "O laboratório está fechado no momento. Consulte os horários na Central de Ajuda."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <Link to="/admin/lab" className="w-full sm:w-auto">
+                <Button variant="outline" size="sm" className="w-full rounded-full">
+                  Ver Mapa
+                </Button>
+              </Link>
+              <Link to="/help" className="w-full sm:w-auto">
+                <Button variant="ghost" size="sm" className="w-full rounded-full">
+                  Horários
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Hero Section */}
       <section className="relative py-12 md:py-24 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 text-white mb-16">
         <div className="absolute inset-0 opacity-10">

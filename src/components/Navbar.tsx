@@ -14,7 +14,12 @@ import {
   X,
   Sun,
   Moon,
-  MessageSquare
+  MessageSquare,
+  FileText,
+  Trophy,
+  Image as ImageIcon,
+  Calendar,
+  HelpCircle
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -58,6 +63,14 @@ const Navbar = () => {
       return commonItems;
     }
 
+    const sharedProtectedItems = [
+      { name: 'Recursos', path: '/resources', icon: FileText },
+      { name: 'Ranking', path: '/leaderboard', icon: Trophy },
+      { name: 'Projetos', path: '/projects', icon: ImageIcon },
+      { name: 'Eventos', path: '/events', icon: Calendar },
+      { name: 'Ajuda', path: '/help', icon: HelpCircle },
+    ];
+
     const roleBasedItems = [];
 
     if (userProfile.role === 'student') {
@@ -84,7 +97,7 @@ const Navbar = () => {
       );
     }
 
-    return [...commonItems, ...roleBasedItems];
+    return [...commonItems, ...roleBasedItems, ...sharedProtectedItems];
   };
 
   const navItems = getNavItems();
