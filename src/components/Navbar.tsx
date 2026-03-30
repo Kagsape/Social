@@ -14,7 +14,12 @@ import {
   X,
   Sun,
   Moon,
-  MessageSquare
+  MessageSquare,
+  Trophy,
+  FolderKanban,
+  Calendar,
+  HelpCircle,
+  FileText
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -52,6 +57,11 @@ const Navbar = () => {
   const getNavItems = () => {
     const commonItems = [
       { name: 'Início', path: '/', icon: LayoutDashboard },
+      { name: 'Recursos', path: '/resources', icon: FileText },
+      { name: 'Ranking', path: '/leaderboard', icon: Trophy },
+      { name: 'Projetos', path: '/projects', icon: FolderKanban },
+      { name: 'Eventos', path: '/events', icon: Calendar },
+      { name: 'Ajuda', path: '/help', icon: HelpCircle },
     ];
 
     if (!userProfile) {
@@ -99,7 +109,7 @@ const Navbar = () => {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[300px] sm:w-[400px]">
+            <SheetContent side="left" className="w-[300px] sm:w-[400px] overflow-y-auto">
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
                   <div className="bg-primary p-1.5 rounded-lg">
@@ -135,17 +145,17 @@ const Navbar = () => {
             <span className="font-bold text-xl tracking-tight hidden sm:inline-block">CIEP 165</span>
           </Link>
           
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden xl:flex items-center gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                  "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
                   location.pathname === item.path ? "bg-accent text-accent-foreground" : "text-muted-foreground"
                 )}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className="h-3.5 w-3.5" />
                 {item.name}
               </Link>
             ))}
@@ -153,12 +163,12 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-1 justify-end">
-          <div className="relative w-full max-w-[200px] lg:max-w-[300px] hidden md:block">
+          <div className="relative w-full max-w-[150px] lg:max-w-[200px] hidden md:block">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
               placeholder="Buscar..."
-              className="pl-9 rounded-full bg-muted/50 border-none focus-visible:ring-1"
+              className="pl-9 rounded-full bg-muted/50 border-none focus-visible:ring-1 h-9 text-sm"
             />
           </div>
           
@@ -166,7 +176,7 @@ const Navbar = () => {
             <Button 
               variant="ghost" 
               size="icon" 
-              className="rounded-full"
+              className="rounded-full h-9 w-9"
               onClick={toggleTheme}
             >
               {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
@@ -174,7 +184,7 @@ const Navbar = () => {
             <Button 
               variant="ghost" 
               size="icon" 
-              className="md:hidden"
+              className="md:hidden h-9 w-9"
               onClick={() => setIsSearchOpen(!isSearchOpen)}
             >
               <Search className="h-5 w-5" />

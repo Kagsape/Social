@@ -26,6 +26,11 @@ import ReservationsPage from "./pages/ReservationsPage";
 import Messages from "./pages/Messages";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
+import Resources from "./pages/Resources";
+import Leaderboard from "./pages/Leaderboard";
+import Projects from "./pages/Projects";
+import Events from "./pages/Events";
+import Help from "./pages/Help";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +46,13 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            
+            {/* Public/Common Routes */}
+            <Route path="/resources" element={<Resources />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/events" element={<Events />} />
+            <Route path="/help" element={<Help />} />
             
             {/* Common Protected Routes */}
             <Route path="/feed" element={
