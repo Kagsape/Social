@@ -1,4 +1,5 @@
 import React from 'react';
+import Layout from '@/components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Download, ExternalLink, BookOpen, Code, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,41 +58,43 @@ const resources = [
 
 const Resources = () => {
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Recursos e Materiais</h1>
-        <p className="text-muted-foreground mt-2">
-          Acesse softwares, apostilas e links úteis para seus estudos no CIEP 165.
-        </p>
-      </div>
+    <Layout>
+      <div className="container mx-auto py-8 px-4">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight">Recursos e Materiais</h1>
+          <p className="text-muted-foreground mt-2">
+            Acesse softwares, apostilas e links úteis para seus estudos no CIEP 165.
+          </p>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {resources.map((resource, index) => (
-          <Card key={index} className="flex flex-col">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <resource.icon className="h-6 w-6 text-primary" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {resources.map((resource, index) => (
+            <Card key={index} className="flex flex-col">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <resource.icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <Badge variant="secondary">{resource.type}</Badge>
                 </div>
-                <Badge variant="secondary">{resource.type}</Badge>
-              </div>
-              <CardTitle className="mt-4">{resource.title}</CardTitle>
-              <CardDescription>{resource.category}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex-grow">
-              <p className="text-sm text-muted-foreground mb-6">
-                {resource.description}
-              </p>
-              <Button className="w-full" asChild>
-                <a href={resource.link} target="_blank" rel="noopener noreferrer">
-                  {resource.type === 'Software' ? 'Baixar' : 'Acessar'}
-                </a>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+                <CardTitle className="mt-4">{resource.title}</CardTitle>
+                <CardDescription>{resource.category}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex-grow">
+                <p className="text-sm text-muted-foreground mb-6">
+                  {resource.description}
+                </p>
+                <Button className="w-full" asChild>
+                  <a href={resource.link} target="_blank" rel="noopener noreferrer">
+                    {resource.type === 'Software' ? 'Baixar' : 'Acessar'}
+                  </a>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 
