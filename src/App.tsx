@@ -24,11 +24,6 @@ import AdminRolesPage from "./pages/AdminRolesPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import Messages from "./pages/Messages";
-import Resources from "./pages/Resources";
-import Leaderboard from "./pages/Leaderboard";
-import Projects from "./pages/Projects";
-import Events from "./pages/Events";
-import Help from "./pages/Help";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 
@@ -76,31 +71,6 @@ const App = () => (
             <Route path="/courses/:id" element={
               <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
                 <CourseDetails />
-              </ProtectedRoute>
-            } />
-            <Route path="/resources" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <Resources />
-              </ProtectedRoute>
-            } />
-            <Route path="/leaderboard" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <Leaderboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/projects" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <Projects />
-              </ProtectedRoute>
-            } />
-            <Route path="/events" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <Events />
-              </ProtectedRoute>
-            } />
-            <Route path="/help" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <Help />
               </ProtectedRoute>
             } />
 
