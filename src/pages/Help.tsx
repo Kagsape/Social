@@ -154,44 +154,50 @@ const Help = () => {
             <h2 className="text-2xl font-bold px-2">Suporte Direto</h2>
             
             <div className="grid grid-cols-1 gap-4">
-              <Card className="border-none shadow-sm hover:shadow-md transition-all group cursor-pointer bg-white dark:bg-slate-900">
-                <CardContent className="p-6 flex items-center gap-4">
-                  <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl text-green-600 group-hover:bg-green-600 group-hover:text-white transition-all">
-                    <MessageCircle className="h-6 w-6" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-bold">Chat Online</h4>
-                    <p className="text-xs text-muted-foreground">Fale com um monitor agora</p>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all" />
-                </CardContent>
-              </Card>
+              <a href="https://w.app/sala_de_informatica" target="_blank" rel="noopener noreferrer">
+                <Card className="border-none shadow-sm hover:shadow-md transition-all group cursor-pointer bg-white dark:bg-slate-900">
+                  <CardContent className="p-6 flex items-center gap-4">
+                    <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl text-green-600 group-hover:bg-green-600 group-hover:text-white transition-all">
+                      <MessageCircle className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-bold">Chat Online</h4>
+                      <p className="text-xs text-muted-foreground">Fale com um monitor agora</p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all" />
+                  </CardContent>
+                </Card>
+              </a>
 
-              <Card className="border-none shadow-sm hover:shadow-md transition-all group cursor-pointer bg-white dark:bg-slate-900">
-                <CardContent className="p-6 flex items-center gap-4">
-                  <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                    <Mail className="h-6 w-6" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-bold">E-mail</h4>
-                    <p className="text-xs text-muted-foreground">suporte@ciep165.edu.br</p>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all" />
-                </CardContent>
-              </Card>
+              <a href="mailto:apropriacaomanutencao@gmail.com">
+                <Card className="border-none shadow-sm hover:shadow-md transition-all group cursor-pointer bg-white dark:bg-slate-900">
+                  <CardContent className="p-6 flex items-center gap-4">
+                    <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                      <Mail className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-bold">E-mail</h4>
+                      <p className="text-xs text-muted-foreground">apropriacaomanutencao@gmail.com</p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all" />
+                  </CardContent>
+                </Card>
+              </a>
 
-              <Card className="border-none shadow-sm hover:shadow-md transition-all group cursor-pointer bg-white dark:bg-slate-900">
-                <CardContent className="p-6 flex items-center gap-4">
-                  <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-all">
-                    <Phone className="h-6 w-6" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-bold">Telefone</h4>
-                    <p className="text-xs text-muted-foreground">(21) 0000-0000</p>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all" />
-                </CardContent>
-              </Card>
+              <a href="tel:21990589284">
+                <Card className="border-none shadow-sm hover:shadow-md transition-all group cursor-pointer bg-white dark:bg-slate-900">
+                  <CardContent className="p-6 flex items-center gap-4">
+                    <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-all">
+                      <Phone className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-bold">Telefone</h4>
+                      <p className="text-xs text-muted-foreground">21 99058-9284</p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all" />
+                  </CardContent>
+                </Card>
+              </a>
             </div>
 
             {tableMissing && (
