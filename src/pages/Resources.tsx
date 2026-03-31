@@ -5,12 +5,13 @@ import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Download, ExternalLink, Laptop, Book, Code, Loader2 } from 'lucide-react';
+import { FileText, Download, ExternalLink, Laptop, Book, Code, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 const Resources = () => {
   const [resources, setResources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     const fetchResources = async () => {
@@ -22,8 +23,12 @@ const Resources = () => {
         
         if (error) throw error;
         setResources(data || []);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao buscar recursos:', error);
+        // Se o erro for de tabela inexistente (PGRST205), marcamos o estado de erro
+        if (error.code === 'PGRST205') {
+          setError(true);
+        }
       } finally {
         setLoading(false);
       }
@@ -52,6 +57,14 @@ const Resources = () => {
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-12 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-2xl p-8">
+            <AlertCircle className="h-12 w-12 mx-auto text-amber-500 mb-4" />
+            <h3 className="text-lg font-bold mb-2">Configuração Necessária</h3>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              A tabela de recursos ainda não foi criada no banco de dados. Por favor, execute o script SQL fornecido no painel do Supabase.
+            </p>
           </div>
         ) : resources.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-2xl">
