@@ -6,16 +6,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
-import { User, Camera, Save, LogOut, Loader2 } from 'lucide-react';
+import { User, Camera, Save, LogOut, Loader2, MapPin, FileText } from 'lucide-react';
 
 const Profile = () => {
   const { user, userProfile, refreshProfile, signOut } = useAuth();
   const [name, setName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [bio, setBio] = useState('');
+  const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -23,6 +26,8 @@ const Profile = () => {
     if (userProfile) {
       setName(userProfile.name || '');
       setAvatarUrl(userProfile.avatar_url || '');
+      setBio(userProfile.bio || '');
+      setLocation(userProfile.location || '');
     }
   }, [userProfile]);
 
@@ -32,16 +37,16 @@ const Profile = () => {
 
     setLoading(true);
     try {
-      // Usamos upsert para garantir que o registro seja criado se não existir
       const { error } = await supabase
         .from('users')
-        .upsert({
-          id: user.id,
+        .update({
           name: name.trim(),
           avatar_url: avatarUrl.trim(),
-          email: user.email, // Mantém o email obrigatório
+          bio: bio.trim(),
+          location: location.trim(),
           updated_at: new Date().toISOString(),
-        });
+        })
+        .eq('id', user.id);
 
       if (error) throw error;
 
@@ -64,7 +69,7 @@ const Profile = () => {
       <div className="max-w-2xl mx-auto space-y-8">
         <div>
           <h1 className="text-3xl font-bold">Meu Perfil</h1>
-          <p className="text-muted-foreground">Gerencie suas informações pessoais e como os outros te veem.</p>
+          <p className="text-muted-foreground">Gerencie suas informações e presença na comunidade.</p>
         </div>
 
         <Card className="border-none shadow-lg overflow-hidden bg-white dark:bg-slate-900">
@@ -85,24 +90,44 @@ const Profile = () => {
               
               <div className="text-center">
                 <h2 className="text-2xl font-bold">{name || 'Usuário'}</h2>
-                <p className="text-muted-foreground">{user?.email}</p>
+                <div className="flex items-center justify-center gap-2">
+                  <p className="text-muted-foreground">{user?.email}</p>
+                  <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase">
+                    {userProfile?.role || 'student'}
+                  </span>
+                </div>
               </div>
             </div>
 
             <form onSubmit={handleUpdateProfile} className="mt-8 space-y-6">
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome Completo</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Seu nome"
-                      className="pl-10 rounded-xl"
-                      required
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nome Completo</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Seu nome"
+                        className="pl-10 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Localização</Label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        id="location" 
+                        value={location} 
+                        onChange={(e) => setLocation(e.target.value)} 
+                        placeholder="Ex: Rio de Janeiro, RJ" 
+                        className="pl-10 rounded-xl" 
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -119,7 +144,20 @@ const Profile = () => {
                       className="pl-10 rounded-xl"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">Insira o link de uma imagem para usar como avatar.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="bio">Bio</Label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Textarea 
+                      id="bio" 
+                      value={bio} 
+                      onChange={(e) => setBio(e.target.value)} 
+                      placeholder="Conte um pouco sobre você..." 
+                      className="pl-10 min-h-[100px] rounded-xl" 
+                    />
+                  </div>
                 </div>
               </div>
 

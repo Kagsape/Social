@@ -32,7 +32,7 @@ interface AdminCourseFormProps {
 }
 
 const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSaved }) => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -56,24 +56,28 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
 
   const fetchTeachers = async () => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('users')
         .select('id, name, email')
         .eq('role', 'teacher');
+      
+      if (error) throw error;
       setTeachers(data || []);
     } catch (error) {
-      console.error('Error fetching teachers:', error);
+      console.error('[AdminCourseForm] Erro ao buscar professores:', error);
     }
   };
 
   const fetchCourse = async () => {
     if (!courseId) return;
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('courses')
         .select('*')
         .eq('id', courseId)
         .single();
+      
+      if (error) throw error;
       if (data) {
         setFormData({
           name: data.name,
@@ -83,7 +87,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
         });
       }
     } catch (error) {
-      console.error('Error fetching course:', error);
+      console.error('[AdminCourseForm] Erro ao buscar curso:', error);
     }
   };
 
@@ -91,32 +95,45 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
     e.preventDefault();
     setLoading(true);
 
+    console.log('[AdminCourseForm] Iniciando salvamento do curso...');
+    console.log('[AdminCourseForm] Dados do formulário:', formData);
+    console.log('[AdminCourseForm] Usuário atual:', user?.id, 'Role:', userProfile?.role);
+
     try {
       const courseData = {
-        ...formData,
-        teacher_id: formData.teacher_id || null
+        name: formData.name,
+        code: formData.code,
+        description: formData.description || null,
+        teacher_id: formData.teacher_id || null,
+        category: 'Tecnologia' // Valor padrão
       };
 
-      let error;
+      let result;
       if (courseId) {
-        ({ error } = await supabase
+        console.log('[AdminCourseForm] Executando UPDATE no curso:', courseId);
+        result = await supabase
           .from('courses')
           .update(courseData)
-          .eq('id', courseId));
+          .eq('id', courseId);
       } else {
-        ({ error } = await supabase
+        console.log('[AdminCourseForm] Executando INSERT de novo curso');
+        result = await supabase
           .from('courses')
-          .insert(courseData));
+          .insert(courseData);
       }
 
-      if (error) throw error;
+      if (result.error) {
+        console.error('[AdminCourseForm] Erro retornado pelo Supabase:', result.error);
+        throw result.error;
+      }
 
+      console.log('[AdminCourseForm] Sucesso!', result.data);
       showSuccess(courseId ? 'Curso atualizado com sucesso!' : 'Curso criado com sucesso!');
       setIsDialogOpen(false);
       onCourseSaved?.();
-    } catch (error) {
-      console.error('Error saving course:', error);
-      showError('Erro ao salvar curso');
+    } catch (error: any) {
+      console.error('[AdminCourseForm] Erro crítico ao salvar curso:', error);
+      showError(`Erro ao salvar curso: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setLoading(false);
     }
@@ -145,6 +162,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
                 value={formData.name}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
                 required
+                placeholder="Ex: Introdução ao React"
               />
             </div>
             <div className="space-y-2">
@@ -154,6 +172,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
                 value={formData.code}
                 onChange={(e) => setFormData({...formData, code: e.target.value})}
                 required
+                placeholder="Ex: REACT-101"
               />
             </div>
             <div className="space-y-2">
@@ -163,6 +182,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
                 value={formData.description}
                 onChange={(e) => setFormData({...formData, description: e.target.value})}
                 rows={3}
+                placeholder="Descreva o que os alunos aprenderão..."
               />
             </div>
             <div className="space-y-2">
@@ -175,7 +195,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
                   <SelectValue placeholder="Selecione um professor" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+                  <SelectItem value="none">Nenhum</SelectItem>
                   {teachers.map(teacher => (
                     <SelectItem key={teacher.id} value={teacher.id}>
                       {teacher.name} ({teacher.email})

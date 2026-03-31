@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2 } from 'lucide-react';
+import { MessageSquare, Heart, Share2, Image as ImageIcon, Trash2, Loader2, AlertCircle, RefreshCw, X, Users, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
@@ -15,67 +15,146 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import CommentSection from '@/components/CommentSection';
+import AnnouncementList from '@/components/AnnouncementList';
+import FeedSkeleton from '@/components/FeedSkeleton';
+import EmptyFeed from '@/components/EmptyFeed';
+import { Link } from 'react-router-dom';
+
+const POSTS_PER_PAGE = 10;
 
 const Feed = () => {
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading, hasPermission } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
   const [newPost, setNewPost] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [feedMode, setFeedMode] = useState<'following' | 'all'>('following');
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fetchingRef = useRef(false);
 
-  const fetchPosts = useCallback(async () => {
+  const fetchPosts = useCallback(async (isNewPage = false, isSilent = false) => {
+    if (fetchingRef.current || !user?.id) return;
+    
+    fetchingRef.current = true;
+    if (!isSilent && !isNewPage) setLoading(true);
+    if (isNewPage) setLoadingMore(true);
+    
     try {
-      const { data, error } = await supabase
+      const currentPage = isNewPage ? page + 1 : 0;
+      const from = currentPage * POSTS_PER_PAGE;
+      const to = from + POSTS_PER_PAGE - 1;
+
+      let query = supabase
         .from('posts')
         .select(`
           id,
           content,
+          image_url,
           created_at,
           user_id,
-          users (
-            id,
-            name,
-            avatar_url,
-            role
-          ),
-          likes (
-            user_id
-          )
+          users (id, name, avatar_url, role),
+          likes (user_id)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
-      if (error) throw error;
+      if (feedMode === 'following') {
+        const { data: followingData } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.id);
+        
+        const followingIds = (followingData || []).map(f => f.following_id);
+        followingIds.push(user.id);
+        query = query.in('user_id', followingIds);
+      }
+
+      const { data, error: supabaseError } = await query;
+
+      if (supabaseError) throw supabaseError;
 
       const processedPosts = (data || []).map(post => ({
         ...post,
         likes_count: Array.isArray(post.likes) ? post.likes.length : 0,
-        has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user?.id) : false
+        has_liked: Array.isArray(post.likes) ? post.likes.some((l: any) => l.user_id === user.id) : false
       }));
-      setPosts(processedPosts);
-    } catch (error: any) {
-      console.error('[Feed] Erro ao buscar posts:', error);
-      showError('Não foi possível carregar os posts.');
+      
+      if (isNewPage) {
+        setPosts(prev => [...prev, ...processedPosts]);
+        setPage(currentPage);
+      } else {
+        setPosts(processedPosts);
+        setPage(0);
+      }
+      
+      setHasMore(processedPosts.length === POSTS_PER_PAGE);
+      setError(null);
+    } catch (err: any) {
+      console.error('[Feed] Erro ao buscar posts:', err);
+      setError('Não foi possível carregar o feed no momento.');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+      fetchingRef.current = false;
     }
-  }, [user?.id]);
+  }, [user?.id, feedMode, page]);
 
   useEffect(() => {
-    if (!authLoading) {
+    if (!authLoading && user?.id) {
       fetchPosts();
 
       const channel = supabase
         .channel('feed_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchPosts())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => fetchPosts())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
+          // Buscar dados completos do novo post para incluir info do usuário
+          const { data: newPostData } = await supabase
+            .from('posts')
+            .select(`
+              id, content, image_url, created_at, user_id,
+              users (id, name, avatar_url, role),
+              likes (user_id)
+            `)
+            .eq('id', payload.new.id)
+            .single();
+          
+          if (newPostData) {
+            const processed = {
+              ...newPostData,
+              likes_count: 0,
+              has_liked: false
+            };
+            setPosts(prev => [processed, ...prev]);
+          }
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'posts' }, (payload) => {
+          setPosts(prev => prev.filter(p => p.id !== payload.old.id));
+        })
         .subscribe();
 
       return () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [authLoading, fetchPosts]);
+  }, [authLoading, user?.id, feedMode]); // Adicionado feedMode para recarregar ao trocar aba
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const createPost = async () => {
     if (!newPost.trim() || !user) return;
@@ -85,132 +164,166 @@ const Feed = () => {
       const { error } = await supabase
         .from('posts')
         .insert({
-          content: newPost,
+          content: newPost.trim(),
           user_id: user.id
         });
 
       if (error) throw error;
 
-      showSuccess('Post publicado!');
+      showSuccess('Post publicado com sucesso!');
       setNewPost('');
-      await fetchPosts();
+      setImagePreview(null);
+      // O post será adicionado via Realtime INSERT handler
     } catch (error: any) {
-      showError('Erro ao publicar. Tente novamente.');
+      showError('Erro ao publicar seu post.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const toggleLike = async (postId: string, hasLiked: boolean) => {
-    if (!user) {
-      showError('Você precisa estar logado para curtir.');
-      return;
-    }
+  const toggleLike = async (post: any) => {
+    if (!user) return;
+    const hasLiked = post.has_liked;
+
+    setPosts(prev => prev.map(p => {
+      if (p.id === post.id) {
+        return {
+          ...p,
+          has_liked: !hasLiked,
+          likes_count: hasLiked ? p.likes_count - 1 : p.likes_count + 1
+        };
+      }
+      return p;
+    }));
 
     try {
       if (hasLiked) {
-        const { error } = await supabase
-          .from('likes')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
-        if (error) throw error;
+        await supabase.from('likes').delete().eq('post_id', post.id).eq('user_id', user.id);
       } else {
-        const { error } = await supabase
-          .from('likes')
-          .insert({ post_id: postId, user_id: user.id });
-        if (error) throw error;
-      }
-      
-      setPosts(current => current.map(p => {
-        if (p.id === postId) {
-          return {
-            ...p,
-            has_liked: !hasLiked,
-            likes_count: hasLiked ? p.likes_count - 1 : p.likes_count + 1
-          };
+        await supabase.from('likes').insert({ post_id: post.id, user_id: user.id });
+        
+        if (post.user_id !== user.id) {
+          await supabase.from('notifications').insert({
+            user_id: post.user_id,
+            actor_id: user.id,
+            type: 'like',
+            post_id: post.id,
+            message: `${userProfile?.name} curtiu seu post.`
+          });
         }
-        return p;
-      }));
+      }
     } catch (error: any) {
-      console.error('[Feed] Erro ao curtir:', error);
-      showError('Erro ao processar curtida.');
+      // Reverter estado em caso de erro silencioso ou recarregar apenas este post
     }
-  };
-
-  const handleShare = (postId: string) => {
-    const url = `${window.location.origin}/feed#post-${postId}`;
-    navigator.clipboard.writeText(url);
-    showSuccess('Link do post copiado para a área de transferência!');
-  };
-
-  const toggleComments = (postId: string) => {
-    setActiveComments(prev => ({
-      ...prev,
-      [postId]: !prev[postId]
-    }));
   };
 
   const deletePost = async (postId: string) => {
     if (!confirm('Tem certeza que deseja excluir este post?')) return;
-
+    
+    setDeletingId(postId);
     try {
-      const { error } = await supabase
-        .from('posts')
-        .delete()
-        .eq('id', postId);
-
+      const { error } = await supabase.from('posts').delete().eq('id', postId);
       if (error) throw error;
+      // O post será removido via Realtime DELETE handler
       showSuccess('Post removido com sucesso.');
-      setPosts(current => current.filter(p => p.id !== postId));
     } catch (error: any) {
       showError('Erro ao excluir post.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  if (authLoading || (loading && posts.length === 0)) {
-    return (
-      <Layout>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-muted-foreground animate-pulse">Carregando seu feed...</p>
-        </div>
-      </Layout>
-    );
-  }
+  if (authLoading) return <Layout><div className="max-w-2xl mx-auto space-y-6"><FeedSkeleton /></div></Layout>;
 
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
+        <AnnouncementList />
+
+        <div className="flex items-center justify-center gap-4 mb-2">
+          <Button 
+            variant={feedMode === 'following' ? 'default' : 'ghost'} 
+            size="sm" 
+            className="rounded-full gap-2"
+            onClick={() => { setFeedMode('following'); setPage(0); }}
+          >
+            <Users className="h-4 w-4" /> Seguindo
+          </Button>
+          <Button 
+            variant={feedMode === 'all' ? 'default' : 'ghost'} 
+            size="sm" 
+            className="rounded-full gap-2"
+            onClick={() => { setFeedMode('all'); setPage(0); }}
+          >
+            <RefreshCw className="h-4 w-4" /> Descobrir
+          </Button>
+        </div>
+
+        {error && (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="p-6 flex flex-col items-center gap-3 text-destructive text-center">
+              <AlertCircle className="h-10 w-10 opacity-50" />
+              <p className="font-bold">{error}</p>
+              <Button variant="outline" size="sm" onClick={() => fetchPosts()} className="gap-2">
+                <RefreshCw className="h-3 w-3" /> Tentar Novamente
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="border-none shadow-sm overflow-hidden bg-white dark:bg-slate-900">
           <CardContent className="p-6">
             <div className="flex gap-4">
               <Avatar className="h-10 w-10 border">
                 <AvatarImage src={userProfile?.avatar_url} />
-                <AvatarFallback className="bg-primary text-primary-foreground">
-                  {userProfile?.name?.charAt(0) || 'U'}
-                </AvatarFallback>
+                <AvatarFallback className="bg-primary text-primary-foreground">{userProfile?.name?.charAt(0)}</AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-4">
                 <Textarea
-                  placeholder={`No que você está pensando, ${userProfile?.name?.split(' ')[0] || 'aluno'}?`}
+                  placeholder={`No que você está pensando, ${userProfile?.name?.split(' ')[0]}?`}
                   value={newPost}
                   onChange={(e) => setNewPost(e.target.value)}
-                  className="min-h-[100px] resize-none border-none focus-visible:ring-0 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4"
+                  className="min-h-[100px] resize-none border-none focus-visible:ring-0 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 transition-all focus:bg-white dark:focus:bg-slate-800"
                 />
+                
+                {imagePreview && (
+                  <div className="relative rounded-xl overflow-hidden border animate-in zoom-in-95 duration-200">
+                    <img src={imagePreview} alt="Preview" className="w-full h-auto max-h-80 object-cover" />
+                    <Button 
+                      variant="destructive" 
+                      size="icon" 
+                      className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg"
+                      onClick={() => setImagePreview(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center pt-2 border-t">
                   <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" className="rounded-full gap-2 text-muted-foreground hover:text-primary">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      ref={fileInputRef} 
+                      onChange={handleImageSelect}
+                    />
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="rounded-full gap-2 text-muted-foreground hover:text-primary hover:bg-primary/5"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
                       <ImageIcon className="h-4 w-4" /> Foto
                     </Button>
                   </div>
                   <Button 
                     onClick={createPost} 
                     disabled={!newPost.trim() || submitting}
-                    className="rounded-full px-6 font-semibold"
+                    className="rounded-full px-6 font-semibold shadow-sm transition-all active:scale-95"
                   >
-                    {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    {submitting ? 'Publicando...' : 'Publicar'}
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Publicar'}
                   </Button>
                 </div>
               </div>
@@ -219,99 +332,114 @@ const Feed = () => {
         </Card>
 
         <div className="space-y-4">
-          {posts.length === 0 ? (
-            <Card className="border-none shadow-sm">
-              <CardContent className="py-16 text-center space-y-2">
-                <div className="bg-slate-100 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <h3 className="font-bold text-lg">O feed está vazio</h3>
-                <p className="text-muted-foreground">Seja o primeiro a compartilhar algo com a turma!</p>
-              </CardContent>
-            </Card>
+          {loading && posts.length === 0 ? (
+            <FeedSkeleton />
+          ) : posts.length === 0 ? (
+            <EmptyFeed />
           ) : (
-            posts.map(post => (
-              <Card key={post.id} id={`post-${post.id}`} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 border">
-                        <AvatarImage src={post.users?.avatar_url} />
-                        <AvatarFallback className="bg-slate-200 dark:bg-slate-700">
-                          {post.users?.name?.charAt(0) || 'U'}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-sm">{post.users?.name || 'Usuário'}</p>
-                          {post.users?.role === 'teacher' && (
-                            <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                              Professor
-                            </Badge>
-                          )}
-                          {post.users?.role === 'admin' && (
-                            <Badge variant="destructive" className="text-[10px] h-4 px-1">
-                              Admin
-                            </Badge>
-                          )}
+            <>
+              {posts.map(post => (
+                <Card key={post.id} className="border-none shadow-sm hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-bottom-2">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Link to={`/profile/${post.user_id}`}>
+                          <Avatar className="h-10 w-10 border hover:opacity-80 transition-opacity">
+                            <AvatarImage src={post.users?.avatar_url} />
+                            <AvatarFallback>{post.users?.name?.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                        </Link>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Link to={`/profile/${post.user_id}`} className="font-bold text-sm hover:underline">
+                              {post.users?.name}
+                            </Link>
+                            {post.users?.role === 'teacher' && <Badge variant="secondary" className="text-[10px] h-4 px-1">Professor</Badge>}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {post.created_at ? formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: ptBR }) : 'Agora'}
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {post.created_at ? formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: ptBR }) : 'Agora'}
-                        </p>
                       </div>
+                      {(post.user_id === user?.id || hasPermission('delete_any_post')) && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-muted-foreground hover:text-destructive rounded-full transition-colors" 
+                          onClick={() => deletePost(post.id)}
+                          disabled={deletingId === post.id}
+                        >
+                          {deletingId === post.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      )}
                     </div>
-                    {(post.user_id === user?.id || userProfile?.role === 'admin') && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="text-muted-foreground hover:text-destructive rounded-full" 
-                        onClick={() => deletePost(post.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {post.content && (
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">
+                        {post.content}
+                      </p>
                     )}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200">
-                    {post.content}
-                  </p>
-                  <div className="flex items-center gap-6 pt-4 border-t">
-                    <button 
-                      onClick={() => toggleLike(post.id, post.has_liked)}
-                      className={cn(
-                        "flex items-center gap-2 text-sm transition-all hover:scale-110",
-                        post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
-                      )}
-                    >
-                      <Heart className={cn("h-5 w-5", post.has_liked && "fill-current")} />
-                      <span className="font-bold">{post.likes_count}</span>
-                    </button>
-                    <button 
-                      onClick={() => toggleComments(post.id)}
-                      className={cn(
-                        "flex items-center gap-2 text-sm transition-colors",
-                        activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary"
-                      )}
-                    >
-                      <MessageSquare className="h-5 w-5" />
-                      <span className="font-medium">Comentar</span>
-                    </button>
-                    <button 
-                      onClick={() => handleShare(post.id)}
-                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      <Share2 className="h-5 w-5" />
-                      <span className="font-medium">Compartilhar</span>
-                    </button>
-                  </div>
+                    
+                    {post.image_url && (
+                      <div className="rounded-xl overflow-hidden border bg-muted/30">
+                        <img 
+                          src={post.image_url} 
+                          alt="Post content" 
+                          className="w-full h-auto max-h-[500px] object-contain mx-auto"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
 
-                  {activeComments[post.id] && (
-                    <CommentSection postId={post.id} />
-                  )}
-                </CardContent>
-              </Card>
-            ))
+                    <div className="flex items-center gap-6 pt-4 border-t">
+                      <button 
+                        onClick={() => toggleLike(post)} 
+                        className={cn(
+                          "flex items-center gap-2 text-sm transition-all active:scale-125", 
+                          post.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
+                        )}
+                      >
+                        <Heart className={cn("h-5 w-5 transition-transform", post.has_liked && "fill-current scale-110")} />
+                        <span className="font-bold">{post.likes_count}</span>
+                      </button>
+                      <button 
+                        onClick={() => setActiveComments(prev => ({ ...prev, [post.id]: !prev[post.id] }))} 
+                        className={cn(
+                          "flex items-center gap-2 text-sm transition-colors", 
+                          activeComments[post.id] ? "text-primary" : "text-muted-foreground hover:text-primary"
+                        )}
+                      >
+                        <MessageSquare className="h-5 w-5" />
+                        <span className="font-medium">Comentar</span>
+                      </button>
+                      <button 
+                        onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/feed#post-${post.id}`); showSuccess('Link copiado!'); }} 
+                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        <Share2 className="h-5 w-5" />
+                        <span className="font-medium">Compartilhar</span>
+                      </button>
+                    </div>
+                    {activeComments[post.id] && <CommentSection postId={post.id} />}
+                  </CardContent>
+                </Card>
+              ))}
+              
+              {hasMore && (
+                <div className="flex justify-center pt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => fetchPosts(true)} 
+                    disabled={loadingMore}
+                    className="rounded-full gap-2"
+                  >
+                    {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronDown className="h-4 w-4" />}
+                    Carregar mais
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

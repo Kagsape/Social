@@ -5,39 +5,71 @@ import Layout from '@/components/Layout';
 import CourseCard from '@/components/CourseCard';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop, BookOpen } from 'lucide-react';
+import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop, BookOpen, Monitor, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const [featuredCourses, setFeaturedCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [labStatus, setLabStatus] = useState({ total: 0, working: 0 });
 
   useEffect(() => {
-    const fetchFeaturedCourses = async () => {
+    const fetchData = async () => {
       try {
-        const { data, error } = await supabase
+        // Fetch featured courses
+        const { data: courses } = await supabase
           .from('courses')
           .select(`
             *,
             users!courses_teacher_id_fkey (name)
           `)
           .limit(3);
+        setFeaturedCourses(courses || []);
 
-        if (error) throw error;
-        setFeaturedCourses(data || []);
+        // Fetch lab status
+        const { data: computers } = await supabase
+          .from('lab_computers')
+          .select('status');
+        
+        if (computers) {
+          setLabStatus({
+            total: computers.length,
+            working: computers.filter(c => c.status === 'working').length
+          });
+        }
       } catch (error) {
-        console.error('Error fetching featured courses:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchFeaturedCourses();
+    fetchData();
   }, []);
 
   return (
     <Layout>
+      {/* Lab Status Widget */}
+      <div className="mb-8 flex justify-center">
+        <div className="bg-white dark:bg-slate-900 px-6 py-3 rounded-full border shadow-sm flex items-center gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
+          <div className="flex items-center gap-2">
+            <div className={`h-3 w-3 rounded-full ${labStatus.working > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-sm font-bold">Status do Laboratório</span>
+          </div>
+          <div className="h-4 w-px bg-border" />
+          <div className="flex items-center gap-2 text-sm">
+            <Monitor className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">{labStatus.working} / {labStatus.total} Máquinas Livres</span>
+          </div>
+          <Link to="/dashboard">
+            <Button size="sm" variant="ghost" className="h-8 rounded-full text-xs gap-1">
+              Reservar <ArrowRight className="h-3 w-3" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+
       {/* Hero Section */}
       <section className="relative py-12 md:py-24 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 text-white mb-16">
         <div className="absolute inset-0 opacity-10">
