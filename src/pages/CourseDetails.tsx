@@ -15,7 +15,8 @@ import {
   CheckCircle2, 
   ArrowLeft,
   User,
-  FileText
+  FileText,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,13 +30,31 @@ const CourseDetails = () => {
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
+  const [allowOnlineEnrollment, setAllowOnlineEnrollment] = useState(true);
 
   useEffect(() => {
     fetchCourseDetails();
+    fetchSettings();
     if (user) {
       checkEnrollment();
     }
   }, [id, user]);
+
+  const fetchSettings = async () => {
+    try {
+      const { data } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('key', 'allow_online_enrollment')
+        .maybeSingle();
+      
+      if (data) {
+        setAllowOnlineEnrollment(data.value === true);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar configurações:', error);
+    }
+  };
 
   const fetchCourseDetails = async () => {
     setLoading(true);
@@ -62,7 +81,7 @@ const CourseDetails = () => {
 
   const checkEnrollment = async () => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('enrollments')
         .select('*')
         .eq('course_id', id)
@@ -71,7 +90,6 @@ const CourseDetails = () => {
 
       if (data) setIsEnrolled(true);
     } catch (error) {
-      // Not enrolled or error
       setIsEnrolled(false);
     }
   };
@@ -79,6 +97,11 @@ const CourseDetails = () => {
   const handleEnroll = async () => {
     if (!user) {
       navigate('/login');
+      return;
+    }
+
+    if (!allowOnlineEnrollment) {
+      showError('As matrículas online estão temporariamente desativadas.');
       return;
     }
 
@@ -202,6 +225,18 @@ const CourseDetails = () => {
                 <Button className="w-full gap-2 bg-green-600 hover:bg-green-700" disabled>
                   <CheckCircle2 className="h-4 w-4" /> Já Matriculado
                 </Button>
+              ) : !allowOnlineEnrollment ? (
+                <div className="space-y-4">
+                  <Button className="w-full py-6 text-lg font-bold opacity-50 cursor-not-allowed" disabled>
+                    Matrículas Indisponíveis
+                  </Button>
+                  <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-800 dark:text-amber-400">
+                      As matrículas online estão desativadas. Procure a secretaria ou seu professor para se inscrever.
+                    </p>
+                  </div>
+                </div>
               ) : (
                 <Button 
                   className="w-full py-6 text-lg font-bold" 
