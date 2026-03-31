@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,13 +10,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
-import { User, Camera, Save, LogOut } from 'lucide-react';
+import { User, Camera, Save, LogOut, Loader2 } from 'lucide-react';
 
 const Profile = () => {
   const { user, userProfile, refreshProfile, signOut } = useAuth();
   const [name, setName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (userProfile) {
@@ -31,13 +32,16 @@ const Profile = () => {
 
     setLoading(true);
     try {
+      // Usamos upsert para garantir que o registro seja criado se não existir
       const { error } = await supabase
         .from('users')
-        .update({
-          name,
-          avatar_url: avatarUrl,
-        })
-        .eq('id', user.id);
+        .upsert({
+          id: user.id,
+          name: name.trim(),
+          avatar_url: avatarUrl.trim(),
+          email: user.email, // Mantém o email obrigatório
+          updated_at: new Date().toISOString(),
+        });
 
       if (error) throw error;
 
@@ -45,10 +49,14 @@ const Profile = () => {
       showSuccess('Perfil atualizado com sucesso!');
     } catch (error: any) {
       console.error('Erro ao atualizar perfil:', error);
-      showError(error.message || 'Erro ao atualizar perfil');
+      showError(error.message || 'Erro ao atualizar perfil. Tente novamente.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const focusAvatarInput = () => {
+    avatarInputRef.current?.focus();
   };
 
   return (
@@ -59,12 +67,12 @@ const Profile = () => {
           <p className="text-muted-foreground">Gerencie suas informações pessoais e como os outros te veem.</p>
         </div>
 
-        <Card className="border-none shadow-lg overflow-hidden">
+        <Card className="border-none shadow-lg overflow-hidden bg-white dark:bg-slate-900">
           <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
           <CardContent className="relative pt-0">
             <div className="flex flex-col items-center -mt-16 space-y-4">
-              <div className="relative group">
-                <Avatar className="h-32 w-32 border-4 border-white dark:border-slate-900 shadow-xl">
+              <div className="relative group" onClick={focusAvatarInput}>
+                <Avatar className="h-32 w-32 border-4 border-white dark:border-slate-900 shadow-xl cursor-pointer">
                   <AvatarImage src={avatarUrl} />
                   <AvatarFallback className="text-4xl bg-primary text-primary-foreground">
                     {name?.charAt(0)?.toUpperCase() || 'U'}
@@ -92,7 +100,7 @@ const Profile = () => {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Seu nome"
-                      className="pl-10"
+                      className="pl-10 rounded-xl"
                       required
                     />
                   </div>
@@ -104,10 +112,11 @@ const Profile = () => {
                     <Camera className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="avatar"
+                      ref={avatarInputRef}
                       value={avatarUrl}
                       onChange={(e) => setAvatarUrl(e.target.value)}
                       placeholder="https://exemplo.com/sua-foto.jpg"
-                      className="pl-10"
+                      className="pl-10 rounded-xl"
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">Insira o link de uma imagem para usar como avatar.</p>
@@ -115,14 +124,14 @@ const Profile = () => {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Button type="submit" className="flex-1 gap-2" disabled={loading}>
-                  <Save className="h-4 w-4" />
+                <Button type="submit" className="flex-1 gap-2 rounded-xl h-12 font-bold" disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {loading ? 'Salvando...' : 'Salvar Alterações'}
                 </Button>
                 <Button 
                   type="button" 
                   variant="outline" 
-                  className="flex-1 gap-2 text-destructive hover:bg-destructive/10"
+                  className="flex-1 gap-2 rounded-xl h-12 text-destructive hover:bg-destructive/10"
                   onClick={() => signOut()}
                 >
                   <LogOut className="h-4 w-4" />
