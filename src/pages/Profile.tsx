@@ -37,15 +37,20 @@ const Profile = () => {
 
     setLoading(true);
     try {
+      // Criamos o objeto de atualização dinamicamente para evitar erros de colunas inexistentes
+      const updateData: any = {
+        name: name.trim(),
+        avatar_url: avatarUrl.trim(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // Só adicionamos bio e location se eles existirem no perfil (ou após você rodar o SQL)
+      if (userProfile && 'bio' in userProfile) updateData.bio = bio.trim();
+      if (userProfile && 'location' in userProfile) updateData.location = location.trim();
+
       const { error } = await supabase
         .from('users')
-        .update({
-          name: name.trim(),
-          avatar_url: avatarUrl.trim(),
-          bio: bio.trim(),
-          location: location.trim(),
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', user.id);
 
       if (error) throw error;
@@ -54,7 +59,7 @@ const Profile = () => {
       showSuccess('Perfil atualizado com sucesso!');
     } catch (error: any) {
       console.error('Erro ao atualizar perfil:', error);
-      showError(error.message || 'Erro ao atualizar perfil. Tente novamente.');
+      showError(error.message || 'Erro ao atualizar perfil. Verifique se as colunas existem no banco de dados.');
     } finally {
       setLoading(false);
     }
