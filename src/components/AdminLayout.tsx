@@ -10,7 +10,7 @@ import {
   Users, 
   Settings,
   ShieldCheck,
-  BarChart3,
+  History,
   ChevronRight,
   LogOut
 } from 'lucide-react';
@@ -34,6 +34,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     { name: 'Laboratório', path: '/admin/lab', icon: Monitor },
     { name: 'Reservas', path: '/admin/reservations', icon: Calendar },
     { name: 'Usuários', path: '/admin/users', icon: Users },
+    { name: 'Logs', path: '/admin/logs', icon: History },
     { name: 'Cargos', path: '/admin/roles', icon: ShieldCheck, chiefOnly: true },
     { name: 'Configurações', path: '/admin/settings', icon: Settings },
   ];

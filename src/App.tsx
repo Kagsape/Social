@@ -22,6 +22,7 @@ import AdminCoursesPage from "./pages/AdminCoursesPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import AdminRolesPage from "./pages/AdminRolesPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
+import AdminLogsPage from "./pages/AdminLogsPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import Messages from "./pages/Messages";
 import AuthCallback from "./pages/AuthCallback";
@@ -120,6 +121,11 @@ const App = () => (
             <Route path="/admin/settings" element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminSettingsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/logs" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminLogsPage />
               </ProtectedRoute>
             } />
 
