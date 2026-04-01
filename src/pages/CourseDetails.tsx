@@ -16,7 +16,8 @@ import {
   ArrowLeft,
   User,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,6 +35,8 @@ const CourseDetails = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!id) return;
+      
       setLoading(true);
       try {
         // Buscar detalhes do curso
@@ -44,9 +47,16 @@ const CourseDetails = () => {
             users!courses_teacher_id_fkey (name, avatar_url)
           `)
           .eq('id', id)
-          .single();
+          .maybeSingle();
 
         if (courseError) throw courseError;
+        
+        if (!courseData) {
+          showError('Curso não encontrado.');
+          navigate('/courses');
+          return;
+        }
+
         setCourse(courseData);
 
         // Buscar contagem real de alunos
@@ -70,7 +80,7 @@ const CourseDetails = () => {
         }
       } catch (error) {
         console.error('Erro ao buscar dados do curso:', error);
-        navigate('/courses');
+        showError('Erro ao carregar informações do curso.');
       } finally {
         setLoading(false);
       }
@@ -116,6 +126,8 @@ const CourseDetails = () => {
       </Layout>
     );
   }
+
+  if (!course) return null;
 
   return (
     <Layout>
