@@ -121,13 +121,15 @@ const StudentDashboard = () => {
     );
   }
 
+  const registrationId = userProfile?.role === 'teacher' ? userProfile?.teacher_id : userProfile?.student_id;
+
   return (
     <Layout>
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">Olá, {userProfile?.name?.split(' ')[0]}!</h1>
-            <p className="text-muted-foreground">Sua matrícula: <span className="font-mono font-bold text-primary">{userProfile?.student_id || 'N/A'}</span></p>
+            <p className="text-muted-foreground">Seu registro: <span className="font-mono font-bold text-primary">{registrationId || 'N/A'}</span></p>
           </div>
           <Link to="/profile">
             <Button variant="outline" className="rounded-full">Ver Perfil Completo</Button>
@@ -237,8 +239,8 @@ const StudentDashboard = () => {
             <Card className="border-none shadow-sm bg-primary text-primary-foreground">
               <CardContent className="p-6 space-y-2">
                 <GraduationCap className="h-8 w-8 opacity-50" />
-                <h3 className="text-xl font-bold">Portal do Aluno</h3>
-                <p className="text-sm opacity-90">Mantenha sua frequência em dia para garantir seu certificado ao final do curso.</p>
+                <h3 className="text-xl font-bold">Portal de Aprendizado</h3>
+                <p className="text-sm opacity-90">Acompanhe seu progresso e frequência em todos os cursos que você está participando.</p>
               </CardContent>
             </Card>
             <ComputerReservationForm onReservationCreated={fetchDashboardData} />

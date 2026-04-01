@@ -19,7 +19,8 @@ import {
   FolderKanban,
   Calendar,
   HelpCircle,
-  FileText
+  FileText,
+  GraduationCap
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -79,28 +80,20 @@ const Navbar = () => {
       return commonItems;
     }
 
-    const roleBasedItems = [];
+    const roleBasedItems = [
+      { name: 'Feed', path: '/feed', icon: Users },
+      { name: 'Mensagens', path: '/messages', icon: MessageSquare },
+      { name: 'Cursos', path: '/courses', icon: BookOpen },
+      { name: 'Meu Aprendizado', path: '/dashboard', icon: GraduationCap }
+    ];
 
-    if (userProfile.role === 'student') {
+    if (userProfile.role === 'teacher') {
       roleBasedItems.push(
-        { name: 'Feed', path: '/feed', icon: Users },
-        { name: 'Mensagens', path: '/messages', icon: MessageSquare },
-        { name: 'Cursos', path: '/courses', icon: BookOpen },
-        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }
-      );
-    } else if (userProfile.role === 'teacher') {
-      roleBasedItems.push(
-        { name: 'Feed', path: '/feed', icon: Users },
-        { name: 'Mensagens', path: '/messages', icon: MessageSquare },
-        { name: 'Cursos', path: '/courses', icon: BookOpen },
-        { name: 'Painel', path: '/teacher', icon: LayoutDashboard }
+        { name: 'Painel Professor', path: '/teacher', icon: LayoutDashboard }
       );
     } else if (userProfile.role === 'admin') {
       roleBasedItems.push(
-        { name: 'Feed', path: '/feed', icon: Users },
-        { name: 'Mensagens', path: '/messages', icon: MessageSquare },
         { name: 'Admin', path: '/admin', icon: ShieldCheck },
-        { name: 'Cursos', path: '/courses', icon: BookOpen },
         { name: 'Laboratório', path: '/admin/lab', icon: Monitor }
       );
     }

@@ -133,7 +133,7 @@ const App = () => (
 
             {/* Role Specific Dashboards */}
             <Route path="/dashboard" element={
-              <ProtectedRoute allowedRoles={['student']}>
+              <ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}>
                 <StudentDashboard />
               </ProtectedRoute>
             } />
