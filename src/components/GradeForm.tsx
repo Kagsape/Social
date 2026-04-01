@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Save } from 'lucide-react';
+import { Plus, Trash2, Save, Loader2 } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
@@ -67,7 +67,6 @@ const GradeForm: React.FC<GradeFormProps> = ({ courseId, students, onGradesSaved
         teacher_id: user.id
       }));
 
-      // Upsert grades (insert or update)
       const { error } = await supabase
         .from('grades')
         .upsert(records, {
@@ -76,7 +75,17 @@ const GradeForm: React.FC<GradeFormProps> = ({ courseId, students, onGradesSaved
 
       if (error) throw error;
 
-      showSuccess('Notas salvas com sucesso!');
+      // Notificar alunos
+      const notifications = validGrades.map(grade => ({
+        user_id: grade.studentId,
+        actor_id: user.id,
+        type: 'grade',
+        message: `Uma nova nota foi lançada para você em: ${grade.assignmentName}`
+      }));
+
+      await supabase.from('notifications').insert(notifications);
+
+      showSuccess('Notas salvas e alunos notificados!');
       setGrades([]);
       onGradesSaved?.();
     } catch (error) {
@@ -178,7 +187,7 @@ const GradeForm: React.FC<GradeFormProps> = ({ courseId, students, onGradesSaved
 
         {grades.length > 0 && (
           <Button onClick={saveGrades} disabled={saving} className="w-full gap-2">
-            <Save className="h-4 w-4" />
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? 'Salvando...' : 'Salvar Todas as Notas'}
           </Button>
         )}

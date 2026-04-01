@@ -28,6 +28,7 @@ const AdminSettingsPage = () => {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [allowEnrollment, setAllowEnrollment] = useState(true);
+  const [schoolName, setSchoolName] = useState('CIEP 165 Brigadeiro Sérgio Carvalho');
 
   useEffect(() => {
     fetchSettings();
@@ -37,13 +38,16 @@ const AdminSettingsPage = () => {
     try {
       const { data, error } = await supabase
         .from('settings')
-        .select('*')
-        .eq('key', 'allow_online_enrollment')
-        .maybeSingle();
+        .select('*');
       
       if (error) throw error;
+      
       if (data) {
-        setAllowEnrollment(data.value === true);
+        const enrollment = data.find(s => s.key === 'allow_online_enrollment');
+        const name = data.find(s => s.key === 'school_name');
+        
+        if (enrollment) setAllowEnrollment(enrollment.value === true);
+        if (name) setSchoolName(name.value as string);
       }
     } catch (error) {
       console.error('Erro ao carregar configurações:', error);
@@ -55,13 +59,14 @@ const AdminSettingsPage = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const updates = [
+        { key: 'allow_online_enrollment', value: allowEnrollment, updated_at: new Date().toISOString() },
+        { key: 'school_name', value: schoolName, updated_at: new Date().toISOString() }
+      ];
+
       const { error } = await supabase
         .from('settings')
-        .upsert({ 
-          key: 'allow_online_enrollment', 
-          value: allowEnrollment,
-          updated_at: new Date().toISOString()
-        });
+        .upsert(updates);
 
       if (error) throw error;
       showSuccess('Configurações salvas com sucesso!');
@@ -118,7 +123,11 @@ const AdminSettingsPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="school-name">Nome da Instituição</Label>
-                    <Input id="school-name" defaultValue="CIEP 165 Brigadeiro Sérgio Carvalho" />
+                    <Input 
+                      id="school-name" 
+                      value={schoolName} 
+                      onChange={(e) => setSchoolName(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="school-email">E-mail de Contato</Label>

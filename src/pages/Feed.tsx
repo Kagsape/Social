@@ -32,6 +32,7 @@ const Feed = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [feedMode, setFeedMode] = useState<'following' | 'all'>('following');
   const [page, setPage] = useState(0);
@@ -114,7 +115,6 @@ const Feed = () => {
       const channel = supabase
         .channel('feed_changes')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
-          // Buscar dados completos do novo post para incluir info do usuário
           const { data: newPostData } = await supabase
             .from('posts')
             .select(`
@@ -143,11 +143,12 @@ const Feed = () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [authLoading, user?.id, feedMode]); // Adicionado feedMode para recarregar ao trocar aba
+  }, [authLoading, user?.id, feedMode]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -161,20 +162,48 @@ const Feed = () => {
     
     setSubmitting(true);
     try {
+      let imageUrl = null;
+
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `posts/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('uploads')
+          .upload(filePath, imageFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('uploads')
+          .getPublicUrl(filePath);
+        
+        imageUrl = publicUrl;
+      }
+
       const { error } = await supabase
         .from('posts')
         .insert({
           content: newPost.trim(),
-          user_id: user.id
+          user_id: user.id,
+          image_url: imageUrl
         });
 
       if (error) throw error;
 
-      showSuccess('Post publicado com sucesso!');
+      // Incrementar pontos por postar (10 pontos)
+      await supabase.rpc('increment_user_points', { 
+        user_id: user.id, 
+        points_to_add: 10 
+      });
+
+      showSuccess('Post publicado! Você ganhou 10 pontos.');
       setNewPost('');
+      setImageFile(null);
       setImagePreview(null);
-      // O post será adicionado via Realtime INSERT handler
     } catch (error: any) {
+      console.error('Erro ao publicar:', error);
       showError('Erro ao publicar seu post.');
     } finally {
       setSubmitting(false);
@@ -202,6 +231,12 @@ const Feed = () => {
       } else {
         await supabase.from('likes').insert({ post_id: post.id, user_id: user.id });
         
+        // Incrementar pontos por curtir (1 ponto)
+        await supabase.rpc('increment_user_points', { 
+          user_id: user.id, 
+          points_to_add: 1 
+        });
+
         if (post.user_id !== user.id) {
           await supabase.from('notifications').insert({
             user_id: post.user_id,
@@ -213,7 +248,7 @@ const Feed = () => {
         }
       }
     } catch (error: any) {
-      // Reverter estado em caso de erro silencioso ou recarregar apenas este post
+      console.error('Erro ao curtir:', error);
     }
   };
 
@@ -224,7 +259,6 @@ const Feed = () => {
     try {
       const { error } = await supabase.from('posts').delete().eq('id', postId);
       if (error) throw error;
-      // O post será removido via Realtime DELETE handler
       showSuccess('Post removido com sucesso.');
     } catch (error: any) {
       showError('Erro ao excluir post.');
@@ -293,7 +327,7 @@ const Feed = () => {
                       variant="destructive" 
                       size="icon" 
                       className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg"
-                      onClick={() => setImagePreview(null)}
+                      onClick={() => { setImagePreview(null); setImageFile(null); }}
                     >
                       <X className="h-4 w-4" />
                     </Button>
