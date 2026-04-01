@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
-import { User, Camera, Save, LogOut, Loader2, MapPin, FileText } from 'lucide-react';
+import { User, Camera, Save, LogOut, Loader2, MapPin, FileText, Hash } from 'lucide-react';
 
 const Profile = () => {
   const { user, userProfile, refreshProfile, signOut } = useAuth();
@@ -37,20 +37,15 @@ const Profile = () => {
 
     setLoading(true);
     try {
-      // Criamos o objeto de atualização dinamicamente para evitar erros de colunas inexistentes
-      const updateData: any = {
-        name: name.trim(),
-        avatar_url: avatarUrl.trim(),
-        updated_at: new Date().toISOString(),
-      };
-
-      // Só adicionamos bio e location se eles existirem no perfil (ou após você rodar o SQL)
-      if (userProfile && 'bio' in userProfile) updateData.bio = bio.trim();
-      if (userProfile && 'location' in userProfile) updateData.location = location.trim();
-
       const { error } = await supabase
         .from('users')
-        .update(updateData)
+        .update({
+          name: name.trim(),
+          avatar_url: avatarUrl.trim(),
+          bio: bio.trim(),
+          location: location.trim(),
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', user.id);
 
       if (error) throw error;
@@ -59,7 +54,7 @@ const Profile = () => {
       showSuccess('Perfil atualizado com sucesso!');
     } catch (error: any) {
       console.error('Erro ao atualizar perfil:', error);
-      showError(error.message || 'Erro ao atualizar perfil. Verifique se as colunas existem no banco de dados.');
+      showError(error.message || 'Erro ao atualizar perfil.');
     } finally {
       setLoading(false);
     }
@@ -68,6 +63,8 @@ const Profile = () => {
   const focusAvatarInput = () => {
     avatarInputRef.current?.focus();
   };
+
+  const registrationId = userProfile?.role === 'teacher' ? userProfile?.teacher_id : userProfile?.student_id;
 
   return (
     <Layout>
@@ -95,11 +92,18 @@ const Profile = () => {
               
               <div className="text-center">
                 <h2 className="text-2xl font-bold">{name || 'Usuário'}</h2>
-                <div className="flex items-center justify-center gap-2">
+                <div className="flex flex-col items-center gap-1">
                   <p className="text-muted-foreground">{user?.email}</p>
-                  <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase">
-                    {userProfile?.role || 'student'}
-                  </span>
+                  <div className="flex gap-2 mt-1">
+                    <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase">
+                      {userProfile?.role === 'student' ? 'Aluno' : userProfile?.role === 'teacher' ? 'Professor' : 'Admin'}
+                    </span>
+                    {registrationId && (
+                      <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-mono font-bold">
+                        ID: {registrationId}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

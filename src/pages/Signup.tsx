@@ -24,24 +24,40 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<'student' | 'teacher'>('student');
 
+  const generateId = (userRole: 'student' | 'teacher') => {
+    const prefix = userRole === 'teacher' ? 'REG' : 'MAT';
+    const year = new Date().getFullYear();
+    const random = Math.floor(1000 + Math.random() * 9000);
+    return `${prefix}-${year}-${random}`;
+  };
+
   const handleRegister = async (data: any) => {
     setLoading(true);
     try {
-      const { data: userData, error } = await supabase.auth.signUp({
+      const generatedId = generateId(role);
+      const metadata: any = {
+        name: data.name,
+        role: role
+      };
+
+      if (role === 'student') {
+        metadata.student_id = generatedId;
+      } else {
+        metadata.teacher_id = generatedId;
+      }
+
+      const { error } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
           emailRedirectTo: `${window.location.origin}/login`,
-          data: {
-            name: data.name,
-            role: role
-          }
+          data: metadata
         },
       });
 
       if (error) throw error;
 
-      showSuccess('Cadastro realizado com sucesso! Por favor, verifique seu e-mail.');
+      showSuccess(`Cadastro realizado! Sua ${role === 'student' ? 'matrícula' : 'identificação'} é: ${generatedId}`);
       navigate('/login');
     } catch (error: any) {
       console.error('Erro ao cadastrar:', error);
@@ -107,7 +123,7 @@ const Signup = () => {
               <div className="space-y-2">
                 <Label>Tipo de Conta</Label>
                 <Select value={role} onValueChange={(value: 'student' | 'teacher') => setRole(value)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="rounded-xl">
                     <SelectValue placeholder="Selecione o tipo de conta" />
                   </SelectTrigger>
                   <SelectContent>
