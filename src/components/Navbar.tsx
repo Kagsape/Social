@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -36,9 +36,11 @@ import {
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { userProfile } = useAuth();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [globalSearch, setGlobalSearch] = useState('');
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
@@ -52,6 +54,15 @@ const Navbar = () => {
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
     document.documentElement.classList.toggle('dark', newTheme === 'dark');
+  };
+
+  const handleGlobalSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (globalSearch.trim()) {
+      navigate(`/courses?q=${encodeURIComponent(globalSearch.trim())}`);
+      setIsSearchOpen(false);
+      setGlobalSearch('');
+    }
   };
   
   const getNavItems = () => {
@@ -163,14 +174,16 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-1 justify-end">
-          <div className="relative w-full max-w-[150px] lg:max-w-[200px] hidden md:block">
+          <form onSubmit={handleGlobalSearch} className="relative w-full max-w-[150px] lg:max-w-[200px] hidden md:block">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar..."
+              placeholder="Buscar cursos..."
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
               className="pl-9 rounded-full bg-muted/50 border-none focus-visible:ring-1 h-9 text-sm"
             />
-          </div>
+          </form>
           
           <div className="flex items-center gap-1 sm:gap-2">
             <Button 
@@ -212,15 +225,17 @@ const Navbar = () => {
       </div>
       {isSearchOpen && (
         <div className="md:hidden p-4 border-t bg-background animate-in slide-in-from-top duration-200">
-          <div className="relative">
+          <form onSubmit={handleGlobalSearch} className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar cursos, posts..."
+              placeholder="Buscar cursos..."
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
               className="pl-10 rounded-xl bg-muted/50 border-none"
               autoFocus
             />
-          </div>
+          </form>
         </div>
       )}
     </nav>

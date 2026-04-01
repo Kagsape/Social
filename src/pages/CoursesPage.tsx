@@ -9,13 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Filter, BookOpen, Users, Clock, Star } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const CoursesPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState('all');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
 
   useEffect(() => {
     fetchCourses();
@@ -40,6 +42,24 @@ const CoursesPage = () => {
     }
   };
 
+  // Filtragem local para busca instantânea
+  const filteredCourses = courses.filter(course => 
+    course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (course.description && course.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (course.code && course.code.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    if (value) {
+      setSearchParams({ q: value });
+    } else {
+      searchParams.delete('q');
+      setSearchParams(searchParams);
+    }
+  };
+
   return (
     <Layout>
       <div className="mb-8 md:mb-12">
@@ -50,7 +70,12 @@ const CoursesPage = () => {
       <div className="flex flex-col gap-4 mb-8">
         <div className="relative w-full">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="O que você quer aprender hoje?" className="pl-10 rounded-xl" />
+          <Input 
+            placeholder="O que você quer aprender hoje?" 
+            className="pl-10 rounded-xl" 
+            value={searchTerm}
+            onChange={handleSearchChange}
+          />
         </div>
         
         <div className="flex items-center gap-2">
@@ -76,13 +101,13 @@ const CoursesPage = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-          {courses.length === 0 ? (
+          {filteredCourses.length === 0 ? (
             <div className="col-span-full text-center py-20 text-muted-foreground border-2 border-dashed rounded-3xl">
               <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>Nenhum curso encontrado nesta categoria.</p>
+              <p>Nenhum curso encontrado para "{searchTerm}".</p>
             </div>
           ) : (
-            courses.map(course => (
+            filteredCourses.map(course => (
               <Card key={course.id} className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-none bg-white dark:bg-slate-900 rounded-2xl">
                 <div className="relative aspect-video overflow-hidden">
                   <div className="bg-gradient-to-br from-blue-500 to-purple-600 w-full h-full flex items-center justify-center">
