@@ -52,7 +52,7 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
       
       setAttendance(existingRecords);
     } catch (error) {
-      console.error('Erro ao buscar frequência:', error);
+      console.error('[Attendance] Erro ao buscar frequência:', error);
     } finally {
       setLoading(false);
     }
@@ -70,11 +70,22 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
   };
 
   const saveAttendance = async () => {
-    if (!user) return;
+    if (!user || !courseId) return;
 
     setSaving(true);
     try {
       const formattedDate = format(date, 'yyyy-MM-dd');
+      
+      // 1. Deletar registros existentes para esta data e curso
+      const { error: deleteError } = await supabase
+        .from('attendance')
+        .delete()
+        .eq('course_id', courseId)
+        .eq('date', formattedDate);
+
+      if (deleteError) throw deleteError;
+
+      // 2. Preparar novos registros
       const records = Object.entries(attendance).map(([studentId, status]) => ({
         student_id: studentId,
         course_id: courseId,
@@ -83,26 +94,20 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
         recorded_by: user.id
       }));
 
-      // Remove registros antigos para esta data e curso antes de inserir os novos
-      await supabase
-        .from('attendance')
-        .delete()
-        .eq('course_id', courseId)
-        .eq('date', formattedDate);
-
+      // 3. Inserir novos registros se houver algum
       if (records.length > 0) {
-        const { error } = await supabase
+        const { error: insertError } = await supabase
           .from('attendance')
           .insert(records);
 
-        if (error) throw error;
+        if (insertError) throw insertError;
       }
 
-      showSuccess('Frequência atualizada com sucesso!');
+      showSuccess('Frequência salva com sucesso!');
       onAttendanceSaved?.();
-    } catch (error) {
-      console.error('Error saving attendance:', error);
-      showError('Erro ao salvar frequência');
+    } catch (error: any) {
+      console.error('[Attendance] Erro ao salvar:', error);
+      showError(`Erro ao salvar frequência: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setSaving(false);
     }
