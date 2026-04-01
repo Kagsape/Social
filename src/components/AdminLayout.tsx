@@ -26,7 +26,10 @@ interface AdminLayoutProps {
 
 const AdminLayout = ({ children }: AdminLayoutProps) => {
   const location = useLocation();
-  const { userProfile, signOut } = useAuth();
+  const { user, userProfile, signOut } = useAuth();
+  
+  const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
+  const isChiefAdmin = user?.email === CHIEF_ADMIN_EMAIL;
   
   const menuItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
@@ -39,8 +42,6 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     { name: 'Configurações', path: '/admin/settings', icon: Settings },
   ];
 
-  const isChiefAdmin = userProfile?.email === 'xakatosh66@gmail.com';
-
   return (
     <Layout>
       <div className="flex flex-col lg:flex-row gap-8">
@@ -50,7 +51,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
             <CardContent className="p-4">
               <div className="mb-6 px-2">
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Administração
+                  Administração {isChiefAdmin && "(Chefe)"}
                 </h2>
               </div>
               <nav className="space-y-1">

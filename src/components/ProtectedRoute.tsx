@@ -13,6 +13,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
   const { user, userProfile, loading } = useAuth();
   const location = useLocation();
 
+  const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -23,6 +25,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Bypass total para o Admin Chefe
+  if (user.email === CHIEF_ADMIN_EMAIL) {
+    return <>{children}</>;
   }
 
   if (allowedRoles.length > 0 && userProfile && !allowedRoles.includes(userProfile.role)) {
