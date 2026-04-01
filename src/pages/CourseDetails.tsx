@@ -26,7 +26,7 @@ import { showSuccess, showError } from '@/utils/toast';
 const CourseDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [course, setCourse] = useState<any>(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [studentCount, setStudentCount] = useState(0);
@@ -110,14 +110,15 @@ const CourseDetails = () => {
       showSuccess('Matrícula realizada com sucesso!');
       setIsEnrolled(true);
       setStudentCount(prev => prev + 1);
-    } catch (error) {
-      showError('Erro ao realizar matrícula');
+    } catch (error: any) {
+      console.error('Erro ao realizar matrícula:', error);
+      showError(error.message || 'Erro ao realizar matrícula. Verifique se você já está matriculado.');
     } finally {
       setEnrolling(false);
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -128,6 +129,9 @@ const CourseDetails = () => {
   }
 
   if (!course) return null;
+
+  // Permitir matrícula para alunos e admins (para testes)
+  const canEnroll = userProfile?.role === 'student' || userProfile?.role === 'admin';
 
   return (
     <Layout>
@@ -181,13 +185,20 @@ const CourseDetails = () => {
                   <CheckCircle2 className="h-4 w-4" /> Já Matriculado
                 </Button>
               ) : (
-                <Button 
-                  className="w-full py-6 text-lg font-bold" 
-                  onClick={handleEnroll}
-                  disabled={enrolling || userProfile?.role !== 'student'}
-                >
-                  {enrolling ? 'Processando...' : 'Matricular-se Agora'}
-                </Button>
+                <div className="space-y-2">
+                  <Button 
+                    className="w-full py-6 text-lg font-bold" 
+                    onClick={handleEnroll}
+                    disabled={enrolling || !canEnroll}
+                  >
+                    {enrolling ? 'Processando...' : 'Matricular-se Agora'}
+                  </Button>
+                  {!canEnroll && (
+                    <p className="text-[10px] text-center text-destructive font-medium">
+                      Apenas alunos podem se matricular em cursos.
+                    </p>
+                  )}
+                </div>
               )}
               
               <div className="space-y-3 pt-4 border-t">
