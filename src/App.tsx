@@ -32,6 +32,7 @@ import Leaderboard from "./pages/Leaderboard";
 import Projects from "./pages/Projects";
 import Events from "./pages/Events";
 import Help from "./pages/Help";
+import Search from "./pages/Search";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/search" element={<Search />} />
             
             {/* Public/Common Routes */}
             <Route path="/resources" element={<Resources />} />

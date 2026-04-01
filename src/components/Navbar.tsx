@@ -59,7 +59,7 @@ const Navbar = () => {
   const handleGlobalSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (globalSearch.trim()) {
-      navigate(`/courses?q=${encodeURIComponent(globalSearch.trim())}`);
+      navigate(`/search?q=${encodeURIComponent(globalSearch.trim())}`);
       setIsSearchOpen(false);
       setGlobalSearch('');
     }
@@ -178,7 +178,7 @@ const Navbar = () => {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar cursos..."
+              placeholder="Buscar na comunidade..."
               value={globalSearch}
               onChange={(e) => setGlobalSearch(e.target.value)}
               className="pl-9 rounded-full bg-muted/50 border-none focus-visible:ring-1 h-9 text-sm"
@@ -229,7 +229,7 @@ const Navbar = () => {
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar cursos..."
+              placeholder="Buscar na comunidade..."
               value={globalSearch}
               onChange={(e) => setGlobalSearch(e.target.value)}
               className="pl-10 rounded-xl bg-muted/50 border-none"

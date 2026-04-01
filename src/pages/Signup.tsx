@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { User, Mail, Lock, UserCheck } from 'lucide-react';
+import { User, Mail, Lock, UserCheck, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Select,
@@ -24,29 +24,36 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<'student' | 'teacher'>('student');
 
-  const generateId = (userRole: 'student' | 'teacher') => {
-    const prefix = userRole === 'teacher' ? 'REG' : 'MAT';
-    const year = new Date().getFullYear();
-    const random = Math.floor(1000 + Math.random() * 9000);
-    return `${prefix}-${year}-${random}`;
-  };
-
   const handleRegister = async (data: any) => {
     setLoading(true);
     try {
-      const generatedId = generateId(role);
+      // 1. Validar contra a Lista Branca (registration_whitelist)
+      const { data: whitelistEntry, error: whitelistError } = await supabase
+        .from('registration_whitelist')
+        .select('*')
+        .eq('registration_id', data.registration_id)
+        .eq('role', role)
+        .maybeSingle();
+
+      if (whitelistError) throw whitelistError;
+
+      if (!whitelistEntry) {
+        throw new Error(`O ID de ${role === 'student' ? 'matrícula' : 'registro'} informado não foi encontrado ou não corresponde ao tipo de conta selecionado. Procure a secretaria.`);
+      }
+
+      // 2. Realizar o cadastro no Auth
       const metadata: any = {
         name: data.name,
         role: role
       };
 
       if (role === 'student') {
-        metadata.student_id = generatedId;
+        metadata.student_id = data.registration_id;
       } else {
-        metadata.teacher_id = generatedId;
+        metadata.teacher_id = data.registration_id;
       }
 
-      const { error } = await supabase.auth.signUp({
+      const { error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
@@ -55,9 +62,9 @@ const Signup = () => {
         },
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
 
-      showSuccess(`Cadastro realizado! Sua ${role === 'student' ? 'matrícula' : 'identificação'} é: ${generatedId}`);
+      showSuccess(`Cadastro realizado com sucesso para ${whitelistEntry.name}! Verifique seu e-mail.`);
       navigate('/login');
     } catch (error: any) {
       console.error('Erro ao cadastrar:', error);
@@ -83,7 +90,7 @@ const Signup = () => {
         <Card className="border-none shadow-xl">
           <CardHeader>
             <CardTitle>Inscreva-se</CardTitle>
-            <CardDescription>Preencha os dados abaixo para criar sua conta.</CardDescription>
+            <CardDescription>Apenas matrículas autorizadas podem se cadastrar.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(handleRegister)} className="space-y-6">
@@ -98,9 +105,33 @@ const Signup = () => {
                     className="pl-10 rounded-xl"
                   />
                 </div>
-                {errors.name && (
-                  <p className="text-red-500 text-sm">{String(errors.name.message)}</p>
-                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="registration_id">ID de Matrícula / Registro</Label>
+                <div className="relative">
+                  <ShieldAlert className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    {...register('registration_id', { required: 'ID de matrícula é obrigatório' })}
+                    id="registration_id"
+                    placeholder="Ex: MAT-2024-0001"
+                    className="pl-10 rounded-xl font-mono"
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">Consulte seu ID na secretaria da escola.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Tipo de Conta</Label>
+                <Select value={role} onValueChange={(value: 'student' | 'teacher') => setRole(value)}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Selecione o tipo de conta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="student">Aluno</SelectItem>
+                    <SelectItem value="teacher">Professor</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -115,22 +146,6 @@ const Signup = () => {
                     className="pl-10 rounded-xl"
                   />
                 </div>
-                {errors.email && (
-                  <p className="text-red-500 text-sm">{String(errors.email.message)}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Tipo de Conta</Label>
-                <Select value={role} onValueChange={(value: 'student' | 'teacher') => setRole(value)}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Selecione o tipo de conta" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="student">Aluno</SelectItem>
-                    <SelectItem value="teacher">Professor</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="space-y-2">
@@ -148,13 +163,10 @@ const Signup = () => {
                     className="pl-10 rounded-xl"
                   />
                 </div>
-                {errors.password && (
-                  <p className="text-red-500 text-sm">{String(errors.password.message)}</p>
-                )}
               </div>
 
               <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg" disabled={loading}>
-                {loading ? 'Criando...' : 'Criar Conta'}
+                {loading ? 'Validando...' : 'Criar Minha Conta'}
               </Button>
             </form>
           </CardContent>
