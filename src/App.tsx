@@ -23,6 +23,7 @@ import AdminUsersPage from "./pages/AdminUsersPage";
 import AdminRolesPage from "./pages/AdminRolesPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminLogsPage from "./pages/AdminLogsPage";
+import AdminWhitelistPage from "./pages/AdminWhitelistPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import Messages from "./pages/Messages";
 import AuthCallback from "./pages/AuthCallback";
@@ -118,6 +119,11 @@ const App = () => (
             <Route path="/admin/roles" element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminRolesPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/whitelist" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminWhitelistPage />
               </ProtectedRoute>
             } />
             <Route path="/admin/settings" element={

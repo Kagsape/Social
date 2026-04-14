@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   History,
   ChevronRight,
-  LogOut
+  LogOut,
+  UserCheck
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     { name: 'Laboratório', path: '/admin/lab', icon: Monitor },
     { name: 'Reservas', path: '/admin/reservations', icon: Calendar },
     { name: 'Usuários', path: '/admin/users', icon: Users },
+    { name: 'Lista Branca', path: '/admin/whitelist', icon: UserCheck },
     { name: 'Logs', path: '/admin/logs', icon: History },
     { name: 'Cargos', path: '/admin/roles', icon: ShieldCheck, chiefOnly: true },
     { name: 'Configurações', path: '/admin/settings', icon: Settings },
