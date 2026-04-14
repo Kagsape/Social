@@ -25,9 +25,12 @@ const Signup = () => {
   const [role, setRole] = useState<'student' | 'teacher'>('student');
 
   const handleRegister = async (data: any) => {
+    console.log('[Signup] Iniciando processo de cadastro...', { email: data.email, role });
     setLoading(true);
+    
     try {
-      // 1. Verificar Whitelist (Opcional - não bloqueia se a tabela não existir)
+      // 1. Verificar Whitelist
+      console.log('[Signup] Passo 1: Verificando Whitelist para ID:', data.registration_id);
       try {
         const { data: whitelistEntry, error: whitelistError } = await supabase
           .from('registration_whitelist')
@@ -36,17 +39,21 @@ const Signup = () => {
           .eq('role', role)
           .maybeSingle();
 
-        // Se a tabela existe e o ID NÃO está lá, barramos
-        if (!whitelistError && !whitelistEntry) {
+        if (whitelistError) {
+          console.warn('[Signup] Erro ao acessar tabela whitelist (pode não existir):', whitelistError);
+        } else if (!whitelistEntry) {
+          console.error('[Signup] ID não encontrado na whitelist');
           throw new Error(`O ID de ${role === 'student' ? 'matrícula' : 'registro'} informado não foi pré-autorizado.`);
+        } else {
+          console.log('[Signup] Whitelist verificada com sucesso:', whitelistEntry.name);
         }
       } catch (err: any) {
-        // Se o erro for "tabela não existe" ou algo similar, ignoramos para não travar o site
         if (err.message?.includes('não foi pré-autorizado')) throw err;
-        console.log('[Signup] Whitelist ignorada ou inacessível.');
+        console.log('[Signup] Prosseguindo sem verificação de whitelist (tabela ausente).');
       }
 
       // 2. Cadastro no Auth
+      console.log('[Signup] Passo 2: Criando usuário no Supabase Auth...');
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -59,19 +66,26 @@ const Signup = () => {
         },
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error('[Signup] Erro no Supabase Auth:', authError);
+        throw authError;
+      }
 
+      console.log('[Signup] Usuário criado com sucesso no Auth:', authData.user?.id);
+
+      // 3. Finalização
       showSuccess('Cadastro realizado com sucesso!');
       
-      // Se o login for automático após o cadastro
       if (authData.session) {
+        console.log('[Signup] Sessão ativa detectada, redirecionando para /feed');
         navigate('/feed');
       } else {
+        console.log('[Signup] Confirmação de e-mail pode ser necessária ou login manual, redirecionando para /login');
         navigate('/login');
       }
     } catch (error: any) {
-      console.error('[Signup] Erro:', error);
-      showError(error.message || 'Erro ao realizar cadastro.');
+      console.error('[Signup] ERRO CRÍTICO NO CADASTRO:', error);
+      showError(error.message || 'Erro ao realizar cadastro. Verifique o console.');
     } finally {
       setLoading(false);
     }
