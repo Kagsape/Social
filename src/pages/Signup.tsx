@@ -51,9 +51,21 @@ const Signup = () => {
         throw new Error(`Este ID está autorizado apenas para o cargo de "${whitelistEntry.role === 'student' ? 'Aluno' : 'Professor'}".`);
       }
 
+      // 3. Verificar se este ID já está vinculado a algum usuário existente
+      const idColumn = role === 'student' ? 'student_id' : 'teacher_id';
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq(idColumn, cleanId)
+        .maybeSingle();
+
+      if (existingUser) {
+        throw new Error('Este número de matrícula já está vinculado a outra conta ativa.');
+      }
+
       console.log('[Signup] Matrícula validada para:', whitelistEntry.name);
 
-      // 3. Criar a conta
+      // 4. Criar a conta
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -68,7 +80,7 @@ const Signup = () => {
 
       if (authError) {
         if (authError.message.includes('rate limit')) {
-          throw new Error('Muitas tentativas seguidas. Por favor, aguarde 5 minutos e tente novamente.');
+          throw new Error('Muitas tentativas seguidas. Por favor, aguarde alguns minutos.');
         }
         if (authError.message.includes('already registered')) {
           throw new Error('Este e-mail já está em uso.');
@@ -76,7 +88,7 @@ const Signup = () => {
         throw authError;
       }
 
-      showSuccess('Conta criada com sucesso! Verifique seu e-mail ou faça login.');
+      showSuccess('Conta criada com sucesso! Agora você pode fazer login.');
       navigate('/login');
       
     } catch (error: any) {
