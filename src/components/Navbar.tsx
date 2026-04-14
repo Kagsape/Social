@@ -11,14 +11,12 @@ import {
   ShieldCheck,
   Monitor,
   Menu,
-  X,
   Sun,
   Moon,
   MessageSquare,
   Trophy,
   FolderKanban,
   Calendar,
-  HelpCircle,
   FileText,
   GraduationCap
 } from 'lucide-react';
@@ -39,7 +37,6 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [globalSearch, setGlobalSearch] = useState('');
 
@@ -61,7 +58,6 @@ const Navbar = () => {
     e.preventDefault();
     if (globalSearch.trim()) {
       navigate(`/search?q=${encodeURIComponent(globalSearch.trim())}`);
-      setIsSearchOpen(false);
       setGlobalSearch('');
     }
   };
@@ -75,9 +71,7 @@ const Navbar = () => {
       { name: 'Eventos', path: '/events', icon: Calendar },
     ];
 
-    if (!userProfile) {
-      return commonItems;
-    }
+    if (!userProfile) return commonItems;
 
     const roleBasedItems = [
       { name: 'Feed', path: '/feed', icon: Users },
@@ -87,15 +81,9 @@ const Navbar = () => {
     ];
 
     if (userProfile.role === 'teacher') {
-      roleBasedItems.push(
-        { name: 'Painel Professor', path: '/teacher', icon: LayoutDashboard }
-      );
+      roleBasedItems.push({ name: 'Painel Professor', path: '/teacher', icon: LayoutDashboard });
     } else if (userProfile.role === 'admin') {
-      roleBasedItems.push(
-        { name: 'Admin', path: '/admin', icon: ShieldCheck },
-        { name: 'Cursos', path: '/admin/courses', icon: BookOpen },
-        { name: 'Laboratório', path: '/admin/lab', icon: Monitor }
-      );
+      roleBasedItems.push({ name: 'Admin', path: '/admin', icon: ShieldCheck });
     }
 
     return [...commonItems, ...roleBasedItems];
@@ -105,36 +93,34 @@ const Navbar = () => {
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between gap-8">
-        <div className="flex items-center gap-6">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 flex h-16 items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="lg:hidden">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[300px] sm:w-[400px] overflow-y-auto">
+            <SheetContent side="left" className="w-[280px] overflow-y-auto">
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
-                  <div className="bg-primary p-1.5 rounded-lg">
-                    <LayoutDashboard className="h-5 w-5 text-primary-foreground" />
-                  </div>
+                  <LayoutDashboard className="h-5 w-5 text-primary" />
                   CIEP 165
                 </SheetTitle>
               </SheetHeader>
-              <div className="flex flex-col gap-2 mt-8">
+              <div className="flex flex-col gap-1 mt-6">
                 {navItems.map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
                     className={cn(
-                      "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors",
+                      "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors",
                       location.pathname === item.path 
                         ? "bg-primary text-primary-foreground" 
                         : "hover:bg-accent text-muted-foreground"
                     )}
                   >
-                    <item.icon className="h-5 w-5" />
+                    <item.icon className="h-4 w-4" />
                     {item.name}
                   </Link>
                 ))}
@@ -143,23 +129,20 @@ const Navbar = () => {
           </Sheet>
 
           <Link to="/" className="flex items-center space-x-2 shrink-0">
-            <div className="bg-primary p-1.5 rounded-lg">
-              <LayoutDashboard className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <span className="font-bold text-xl tracking-tight hidden sm:inline-block">CIEP 165</span>
+            <LayoutDashboard className="h-6 w-6 text-primary" />
+            <span className="font-bold text-lg tracking-tight hidden sm:inline-block">CIEP 165</span>
           </Link>
           
           <div className="hidden lg:flex items-center gap-1">
-            {navItems.map((item) => (
+            {navItems.slice(0, 5).map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                  "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors hover:bg-accent",
                   location.pathname === item.path ? "bg-accent text-accent-foreground" : "text-muted-foreground"
                 )}
               >
-                <item.icon className="h-4 w-4" />
                 {item.name}
               </Link>
             ))}
@@ -167,62 +150,37 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-1 justify-end">
-          <form onSubmit={handleGlobalSearch} className="relative w-full max-w-[150px] lg:max-w-[200px] hidden md:block">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <form onSubmit={handleGlobalSearch} className="relative w-full max-w-[120px] md:max-w-[180px] hidden sm:block">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar na comunidade..."
+              placeholder="Buscar..."
               value={globalSearch}
               onChange={(e) => setGlobalSearch(e.target.value)}
-              className="pl-9 rounded-full bg-muted/50 border-none focus-visible:ring-1 h-9 text-sm"
+              className="pl-8 rounded-full bg-muted/50 border-none h-8 text-xs"
             />
           </form>
           
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="rounded-full h-9 w-9"
-              onClick={toggleTheme}
-            >
-              {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+          <div className="flex items-center gap-1.5">
+            <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={toggleTheme}>
+              {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
             </Button>
             {userProfile && <NotificationBell />}
             {userProfile ? (
               <Link to="/profile">
-                <Button variant="ghost" size="icon" className="rounded-full border overflow-hidden h-9 w-9">
-                  {userProfile.avatar_url ? (
-                    <img src={userProfile.avatar_url} alt="Perfil" className="h-full w-full object-cover" />
-                  ) : (
-                    <User className="h-5 w-5" />
-                  )}
-                </Button>
+                <Avatar className="h-8 w-8 border">
+                  <AvatarImage src={userProfile.avatar_url} />
+                  <AvatarFallback>{userProfile.name?.charAt(0)}</AvatarFallback>
+                </Avatar>
               </Link>
             ) : (
               <Link to="/login">
-                <Button variant="default" className="rounded-full px-6 h-9 text-sm font-semibold">
-                  Entrar
-                </Button>
+                <Button size="sm" className="rounded-full px-4 h-8 text-xs font-bold">Entrar</Button>
               </Link>
             )}
           </div>
         </div>
       </div>
-      {isSearchOpen && (
-        <div className="md:hidden p-4 border-t bg-background animate-in slide-in-from-top duration-200">
-          <form onSubmit={handleGlobalSearch} className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Buscar na comunidade..."
-              value={globalSearch}
-              onChange={(e) => setGlobalSearch(e.target.value)}
-              className="pl-10 rounded-xl bg-muted/50 border-none"
-              autoFocus
-            />
-          </form>
-        </div>
-      )}
     </nav>
   );
 };
