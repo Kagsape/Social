@@ -1,10 +1,21 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, Clock, UserCheck, UserX, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
+import { 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  UserCheck, 
+  UserX, 
+  Calendar as CalendarIcon, 
+  Loader2,
+  Users,
+  CheckCheck,
+  Monitor
+} from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
@@ -30,6 +41,7 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
   const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late'>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hasLabSession, setHasLabSession] = useState(false);
 
   const fetchExistingAttendance = useCallback(async () => {
     if (!courseId || !date) return;
@@ -37,22 +49,36 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
     setLoading(true);
     try {
       const formattedDate = format(date, 'yyyy-MM-dd');
-      const { data, error } = await supabase
+      
+      // Buscar frequência
+      const { data: attendanceData, error: attendanceError } = await supabase
         .from('attendance')
         .select('student_id, status')
         .eq('course_id', courseId)
         .eq('date', formattedDate);
 
-      if (error) throw error;
+      if (attendanceError) throw attendanceError;
 
       const existingRecords: Record<string, 'present' | 'absent' | 'late'> = {};
-      data?.forEach(record => {
+      attendanceData?.forEach(record => {
         existingRecords[record.student_id] = record.status as any;
       });
       
       setAttendance(existingRecords);
+
+      // Verificar se houve reserva de laboratório para esta turma nesta data
+      const { data: labData } = await supabase
+        .from('lab_usage')
+        .select('id')
+        .eq('course_id', courseId)
+        .gte('start_time', `${formattedDate}T00:00:00`)
+        .lte('start_time', `${formattedDate}T23:59:59`)
+        .maybeSingle();
+
+      setHasLabSession(!!labData);
+
     } catch (error) {
-      console.error('[Attendance] Erro ao buscar frequência:', error);
+      console.error('[Attendance] Erro ao buscar dados:', error);
     } finally {
       setLoading(false);
     }
@@ -62,11 +88,30 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
     fetchExistingAttendance();
   }, [fetchExistingAttendance]);
 
+  const stats = useMemo(() => {
+    const total = students.length;
+    const present = Object.values(attendance).filter(s => s === 'present').length;
+    const absent = Object.values(attendance).filter(s => s === 'absent').length;
+    const late = Object.values(attendance).filter(s => s === 'late').length;
+    const pending = total - Object.keys(attendance).length;
+
+    return { total, present, absent, late, pending };
+  }, [students, attendance]);
+
   const handleAttendanceChange = (studentId: string, status: 'present' | 'absent' | 'late') => {
     setAttendance(prev => ({
       ...prev,
       [studentId]: status
     }));
+  };
+
+  const markAllPresent = () => {
+    const allPresent: Record<string, 'present'> = {};
+    students.forEach(s => {
+      allPresent[s.id] = 'present';
+    });
+    setAttendance(allPresent);
+    showSuccess('Todos os alunos marcados como presente.');
   };
 
   const saveAttendance = async () => {
@@ -76,7 +121,6 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
     try {
       const formattedDate = format(date, 'yyyy-MM-dd');
       
-      // 1. Deletar registros existentes para esta data e curso
       const { error: deleteError } = await supabase
         .from('attendance')
         .delete()
@@ -85,7 +129,6 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
 
       if (deleteError) throw deleteError;
 
-      // 2. Preparar novos registros
       const records = Object.entries(attendance).map(([studentId, status]) => ({
         student_id: studentId,
         course_id: courseId,
@@ -94,7 +137,6 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
         recorded_by: user.id
       }));
 
-      // 3. Inserir novos registros se houver algum
       if (records.length > 0) {
         const { error: insertError } = await supabase
           .from('attendance')
@@ -107,63 +149,83 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
       onAttendanceSaved?.();
     } catch (error: any) {
       console.error('[Attendance] Erro ao salvar:', error);
-      showError(`Erro ao salvar frequência: ${error.message || 'Erro desconhecido'}`);
+      showError(`Erro ao salvar frequência: ${error.message}`);
     } finally {
       setSaving(false);
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'present': return <UserCheck className="h-4 w-4 text-green-600" />;
-      case 'absent': return <UserX className="h-4 w-4 text-red-600" />;
-      case 'late': return <Clock className="h-4 w-4 text-yellow-600" />;
-      default: return null;
-    }
-  };
-
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'present': return 'default' as const;
-      case 'absent': return 'destructive' as const;
-      case 'late': return 'secondary' as const;
-      default: return 'outline' as const;
-    }
-  };
-
   return (
-    <Card className="border-none shadow-sm">
-      <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <CardTitle className="flex items-center gap-2">
-          <UserCheck className="h-5 w-5 text-primary" />
-          Diário de Classe
-        </CardTitle>
-        
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className={cn(
-                "w-full md:w-[240px] justify-start text-left font-normal rounded-xl",
-                !date && "text-muted-foreground"
-              )}
+    <Card className="border-none shadow-sm overflow-hidden">
+      <CardHeader className="bg-slate-50 dark:bg-slate-900/50 border-b">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <CardTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-primary" />
+              Diário de Classe
+            </CardTitle>
+            {hasLabSession && (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 gap-1">
+                <Monitor className="h-3 w-3" /> Aula no Laboratório
+              </Badge>
+            )}
+          </div>
+          
+          <div className="flex flex-wrap gap-2 w-full md:w-auto">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="flex-1 md:w-[200px] justify-start text-left font-normal rounded-xl bg-white dark:bg-slate-950"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {date ? format(date, "dd/MM/yyyy") : "Data"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={(d) => d && setDate(d)}
+                  initialFocus
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={markAllPresent}
+              className="rounded-xl gap-2 bg-white dark:bg-slate-950"
+              disabled={loading || students.length === 0}
             >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {date ? format(date, "PPP", { locale: ptBR }) : "Selecionar data"}
+              <CheckCheck className="h-4 w-4" /> Marcar Todos
             </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={(d) => d && setDate(d)}
-              initialFocus
-              locale={ptBR}
-            />
-          </PopoverContent>
-        </Popover>
+          </div>
+        </div>
+
+        {/* Stats Summary */}
+        <div className="grid grid-cols-4 gap-2 mt-4">
+          <div className="bg-white dark:bg-slate-950 p-2 rounded-lg border text-center">
+            <p className="text-[10px] uppercase font-bold text-muted-foreground">Total</p>
+            <p className="text-lg font-black">{stats.total}</p>
+          </div>
+          <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded-lg border border-green-100 dark:border-green-900/30 text-center">
+            <p className="text-[10px] uppercase font-bold text-green-600">Pres.</p>
+            <p className="text-lg font-black text-green-600">{stats.present}</p>
+          </div>
+          <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded-lg border border-red-100 dark:border-red-900/30 text-center">
+            <p className="text-[10px] uppercase font-bold text-red-600">Faltas</p>
+            <p className="text-lg font-black text-red-600">{stats.absent}</p>
+          </div>
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded-lg border border-yellow-100 dark:border-yellow-900/30 text-center">
+            <p className="text-[10px] uppercase font-bold text-yellow-600">Atraso</p>
+            <p className="text-lg font-black text-yellow-600">{stats.late}</p>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+
+      <CardContent className="p-6 space-y-6">
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary/50" />
@@ -173,50 +235,65 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
             Nenhum aluno matriculado neste curso.
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid gap-2">
             {students.map(student => (
-              <div key={student.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-2xl bg-slate-50/50 dark:bg-slate-800/30 gap-4">
+              <div 
+                key={student.id} 
+                className={cn(
+                  "flex items-center justify-between p-3 border rounded-xl transition-colors",
+                  attendance[student.id] === 'present' ? "bg-green-50/30 border-green-100 dark:bg-green-900/5" : 
+                  attendance[student.id] === 'absent' ? "bg-red-50/30 border-red-100 dark:bg-red-900/5" : 
+                  "bg-slate-50/50 dark:bg-slate-800/30"
+                )}
+              >
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
+                  <div className={cn(
+                    "h-8 w-8 rounded-full flex items-center justify-center font-bold text-xs",
+                    attendance[student.id] === 'present' ? "bg-green-100 text-green-700" : 
+                    attendance[student.id] === 'absent' ? "bg-red-100 text-red-700" : 
+                    "bg-primary/10 text-primary"
+                  )}>
                     {student.name.charAt(0)}
                   </div>
-                  <div className="space-y-1">
-                    <span className="font-bold text-sm">{student.name}</span>
-                    {attendance[student.id] && (
-                      <div className="flex items-center gap-1">
-                        <Badge variant={getStatusBadgeVariant(attendance[student.id])} className="text-[10px] h-5 px-2 gap-1">
-                          {getStatusIcon(attendance[student.id])}
-                          {attendance[student.id] === 'present' ? 'Presente' : 
-                           attendance[student.id] === 'absent' ? 'Faltou' : 'Atrasado'}
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
+                  <span className="font-bold text-sm truncate max-w-[120px] md:max-w-none">{student.name}</span>
                 </div>
-                <div className="flex gap-2 w-full sm:w-auto">
+                
+                <div className="flex gap-1">
                   <Button
                     size="sm"
-                    variant={attendance[student.id] === 'present' ? 'default' : 'outline'}
+                    variant={attendance[student.id] === 'present' ? 'default' : 'ghost'}
                     onClick={() => handleAttendanceChange(student.id, 'present')}
-                    className="flex-1 sm:flex-none rounded-lg h-9"
+                    className={cn(
+                      "h-8 w-8 p-0 rounded-lg",
+                      attendance[student.id] === 'present' ? "bg-green-600 hover:bg-green-700" : "text-muted-foreground"
+                    )}
+                    title="Presente"
                   >
-                    P
+                    <UserCheck className="h-4 w-4" />
                   </Button>
                   <Button
                     size="sm"
-                    variant={attendance[student.id] === 'absent' ? 'destructive' : 'outline'}
+                    variant={attendance[student.id] === 'absent' ? 'destructive' : 'ghost'}
                     onClick={() => handleAttendanceChange(student.id, 'absent')}
-                    className="flex-1 sm:flex-none rounded-lg h-9"
+                    className={cn(
+                      "h-8 w-8 p-0 rounded-lg",
+                      attendance[student.id] === 'absent' ? "bg-red-600 hover:bg-red-700" : "text-muted-foreground"
+                    )}
+                    title="Faltou"
                   >
-                    F
+                    <UserX className="h-4 w-4" />
                   </Button>
                   <Button
                     size="sm"
-                    variant={attendance[student.id] === 'late' ? 'secondary' : 'outline'}
+                    variant={attendance[student.id] === 'late' ? 'secondary' : 'ghost'}
                     onClick={() => handleAttendanceChange(student.id, 'late')}
-                    className="flex-1 sm:flex-none rounded-lg h-9"
+                    className={cn(
+                      "h-8 w-8 p-0 rounded-lg",
+                      attendance[student.id] === 'late' ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "text-muted-foreground"
+                    )}
+                    title="Atrasado"
                   >
-                    A
+                    <Clock className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
@@ -231,7 +308,7 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
         >
           {saving ? (
             <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...</>
-          ) : 'Salvar Frequência'}
+          ) : 'Finalizar Chamada'}
         </Button>
       </CardContent>
     </Card>

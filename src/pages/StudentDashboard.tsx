@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,8 @@ import {
   Clock,
   AlertCircle,
   Loader2,
-  Monitor
+  Monitor,
+  TrendingUp
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,6 +26,7 @@ import DashboardStats from '@/components/DashboardStats';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Progress } from "@/components/ui/progress";
 
 const StudentDashboard = () => {
   const { user, userProfile } = useAuth();
@@ -71,7 +73,6 @@ const StudentDashboard = () => {
       
       setAttendance(attendanceData || []);
 
-      // Buscar reservas onde o aluno está incluído (via texto no purpose)
       const { data: reservations } = await supabase
         .from('lab_usage')
         .select(`*, lab_computers(name)`)
@@ -96,6 +97,12 @@ const StudentDashboard = () => {
       setLoading(false);
     }
   };
+
+  const attendanceRate = useMemo(() => {
+    if (attendance.length === 0) return 0;
+    const presentCount = attendance.filter(a => a.status === 'present' || a.status === 'late').length;
+    return Math.round((presentCount / attendance.length) * 100);
+  }, [attendance]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -229,11 +236,25 @@ const StudentDashboard = () => {
           </div>
 
           <div className="space-y-6">
-            <Card className="border-none shadow-sm bg-primary text-primary-foreground">
-              <CardContent className="p-6 space-y-2">
-                <GraduationCap className="h-8 w-8 opacity-50" />
-                <h3 className="text-xl font-bold">Portal de Aprendizado</h3>
-                <p className="text-sm opacity-90">Acompanhe seu progresso e frequência em todos os cursos que você está participando.</p>
+            <Card className="border-none shadow-sm bg-primary text-primary-foreground overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-4 opacity-10">
+                <TrendingUp className="h-24 w-24" />
+              </div>
+              <CardContent className="p-6 space-y-4 relative z-10">
+                <div className="space-y-1">
+                  <h3 className="text-xl font-bold">Taxa de Presença</h3>
+                  <p className="text-sm opacity-80">Seu engajamento nas aulas</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm font-bold">
+                    <span>{attendanceRate}%</span>
+                    <span>Meta: 75%</span>
+                  </div>
+                  <Progress value={attendanceRate} className="h-2 bg-white/20" />
+                </div>
+                <p className="text-[10px] opacity-70 italic">
+                  {attendanceRate >= 75 ? "Parabéns! Você está com uma ótima frequência." : "Atenção! Tente não faltar às próximas aulas."}
+                </p>
               </CardContent>
             </Card>
             
