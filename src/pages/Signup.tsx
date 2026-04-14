@@ -26,13 +26,11 @@ const Signup = () => {
 
   const handleRegister = async (data: any) => {
     const cleanId = data.registration_id.trim();
-    console.log('[Signup] Iniciando cadastro...', { email: data.email, role, id: cleanId });
+    console.log('[Signup] Validando matrícula...', { role, id: cleanId });
     setLoading(true);
     
     try {
-      // 1. Verificar Whitelist com logs detalhados
-      console.log('[Signup] Consultando whitelist para ID:', cleanId);
-      
+      // 1. Verificar se o ID existe na Whitelist (Obrigatório)
       const { data: whitelistEntry, error: whitelistError } = await supabase
         .from('registration_whitelist')
         .select('*')
@@ -40,27 +38,22 @@ const Signup = () => {
         .maybeSingle();
 
       if (whitelistError) {
-        console.error('[Signup] Erro técnico ao consultar whitelist:', whitelistError);
-        // Se der erro de permissão (RLS), vamos logar mas permitir o cadastro para não travar o usuário
-        console.warn('[Signup] Prosseguindo apesar do erro de consulta (possível problema de RLS).');
-      } else if (!whitelistEntry) {
-        console.error('[Signup] ID não encontrado na tabela de autorizados.');
-        // Verificando se a tabela está vazia
-        const { count } = await supabase.from('registration_whitelist').select('*', { count: 'exact', head: true });
-        if (count && count > 0) {
-          throw new Error(`O ID "${cleanId}" não consta na lista de autorizados do sistema.`);
-        } else {
-          console.warn('[Signup] Tabela de whitelist parece vazia. Permitindo cadastro livre.');
-        }
-      } else {
-        console.log('[Signup] Sucesso! ID encontrado para:', whitelistEntry.name);
-        if (whitelistEntry.role !== role) {
-          throw new Error(`Este ID está autorizado como "${whitelistEntry.role}", mas você selecionou "${role}".`);
-        }
+        console.error('[Signup] Erro de conexão com a lista:', whitelistError);
+        throw new Error('Erro ao validar sua matrícula. Por favor, tente novamente em instantes.');
       }
 
-      // 2. Cadastro no Auth
-      console.log('[Signup] Criando conta no Supabase Auth...');
+      if (!whitelistEntry) {
+        throw new Error(`A matrícula "${cleanId}" não está autorizada. Peça ao administrador para incluí-la no painel.`);
+      }
+
+      // 2. Verificar se o cargo bate com o autorizado
+      if (whitelistEntry.role !== role) {
+        throw new Error(`Este ID está autorizado apenas para o cargo de "${whitelistEntry.role === 'student' ? 'Aluno' : 'Professor'}".`);
+      }
+
+      console.log('[Signup] Matrícula validada para:', whitelistEntry.name);
+
+      // 3. Criar a conta
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -74,20 +67,18 @@ const Signup = () => {
       });
 
       if (authError) {
-        console.error('[Signup] Erro no Auth:', authError);
         if (authError.message.includes('already registered')) {
-          throw new Error('Este e-mail já está cadastrado. Tente fazer login ou use outro e-mail.');
+          throw new Error('Este e-mail já está em uso.');
         }
         throw authError;
       }
 
-      console.log('[Signup] Cadastro finalizado com sucesso!');
-      showSuccess('Conta criada! Verifique seu e-mail ou faça login.');
+      showSuccess('Conta criada com sucesso! Agora você pode fazer login.');
       navigate('/login');
       
     } catch (error: any) {
-      console.error('[Signup] Falha no cadastro:', error);
-      showError(error.message || 'Erro ao realizar cadastro.');
+      console.error('[Signup] Erro:', error.message);
+      showError(error.message);
     } finally {
       setLoading(false);
     }
@@ -106,25 +97,25 @@ const Signup = () => {
             </div>
           </div>
           <h2 className="text-3xl font-bold tracking-tight">Criar Conta</h2>
-          <p className="text-muted-foreground mt-2">CIEP 165 - Portal de Tecnologia</p>
+          <p className="text-muted-foreground mt-2">CIEP 165 - Sistema de Matrícula</p>
         </div>
 
         <Card className="border-none shadow-2xl">
           <CardHeader>
-            <CardTitle>Cadastro</CardTitle>
-            <CardDescription>Informe seus dados para começar.</CardDescription>
+            <CardTitle>Cadastro Obrigatório</CardTitle>
+            <CardDescription>Você precisa estar na lista branca para criar uma conta.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(handleRegister)} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="name">Nome Completo</Label>
+                <Label htmlFor="registration_id">Número de Matrícula / ID</Label>
                 <div className="relative">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <ShieldAlert className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    {...register('name', { required: 'Nome é obrigatório' })}
-                    id="name"
-                    placeholder="Seu nome"
-                    className="pl-10 rounded-xl"
+                    {...register('registration_id', { required: 'ID é obrigatório' })}
+                    id="registration_id"
+                    placeholder="Digite seu ID autorizado"
+                    className="pl-10 rounded-xl font-mono"
                   />
                 </div>
               </div>
@@ -143,14 +134,14 @@ const Signup = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="registration_id">ID de Matrícula / Registro</Label>
+                <Label htmlFor="name">Nome Completo</Label>
                 <div className="relative">
-                  <ShieldAlert className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    {...register('registration_id', { required: 'ID é obrigatório' })}
-                    id="registration_id"
-                    placeholder="Digite seu ID autorizado"
-                    className="pl-10 rounded-xl font-mono"
+                    {...register('name', { required: 'Nome é obrigatório' })}
+                    id="name"
+                    placeholder="Seu nome"
+                    className="pl-10 rounded-xl"
                   />
                 </div>
               </div>
@@ -184,7 +175,7 @@ const Signup = () => {
               </div>
 
               <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg" disabled={loading}>
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Criar Minha Conta'}
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Validar e Criar Conta'}
               </Button>
             </form>
           </CardContent>
