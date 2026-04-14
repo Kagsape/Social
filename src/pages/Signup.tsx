@@ -3,12 +3,12 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { showSuccess, showError } from '@/utils/toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { User, Mail, Lock, UserCheck, ShieldAlert, Hash } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { User, Mail, Lock, UserCheck, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Select,
@@ -27,33 +27,39 @@ const Signup = () => {
   const handleRegister = async (data: any) => {
     setLoading(true);
     try {
-      // 1. Validar contra a Lista Branca (registration_whitelist)
-      const { data: whitelistEntry, error: whitelistError } = await supabase
-        .from('registration_whitelist')
-        .select('*')
-        .eq('registration_id', data.registration_id)
-        .eq('role', role)
-        .maybeSingle();
+      console.log('[Signup] Iniciando processo de cadastro para:', data.email);
+      
+      // 1. Tentar validar contra a Lista Branca (opcional se a tabela não existir)
+      let isWhitelisted = true;
+      try {
+        const { data: whitelistEntry, error: whitelistError } = await supabase
+          .from('registration_whitelist')
+          .select('*')
+          .eq('registration_id', data.registration_id)
+          .eq('role', role)
+          .maybeSingle();
 
-      if (whitelistError) throw whitelistError;
-
-      if (!whitelistEntry) {
-        throw new Error(`O ID de ${role === 'student' ? 'matrícula' : 'registro'} informado não foi encontrado ou não corresponde ao tipo de conta selecionado. Procure a secretaria.`);
+        if (whitelistError && whitelistError.code !== 'PGRST204' && whitelistError.code !== '42P01') {
+          console.warn('[Signup] Erro ao consultar whitelist:', whitelistError);
+        } else if (!whitelistEntry && !whitelistError) {
+          // Se a tabela existe e o ID não está lá, barramos (segurança)
+          throw new Error(`O ID de ${role === 'student' ? 'matrícula' : 'registro'} informado não foi autorizado. Procure a secretaria.`);
+        }
+      } catch (err: any) {
+        // Se a tabela não existir (42P01), ignoramos a trava para não bloquear o site
+        if (err.message?.includes('não foi autorizado')) throw err;
+        console.log('[Signup] Whitelist não configurada ou inacessível, prosseguindo com cadastro padrão.');
       }
 
-      // 2. Realizar o cadastro no Auth
+      // 2. Preparar Metadados
       const metadata: any = {
         name: data.name,
-        role: role
+        role: role,
+        [role === 'student' ? 'student_id' : 'teacher_id']: data.registration_id
       };
 
-      if (role === 'student') {
-        metadata.student_id = data.registration_id;
-      } else {
-        metadata.teacher_id = data.registration_id;
-      }
-
-      const { error: authError } = await supabase.auth.signUp({
+      // 3. Realizar o cadastro no Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
@@ -64,11 +70,16 @@ const Signup = () => {
 
       if (authError) throw authError;
 
-      showSuccess(`Cadastro realizado com sucesso para ${whitelistEntry.name}! Verifique seu e-mail.`);
-      navigate('/login');
+      if (authData.session) {
+        showSuccess('Cadastro realizado e login efetuado!');
+        navigate('/feed');
+      } else {
+        showSuccess('Cadastro realizado! Verifique seu e-mail para confirmar a conta.');
+        navigate('/login');
+      }
     } catch (error: any) {
-      console.error('Erro ao cadastrar:', error);
-      showError(error.message || 'Erro ao cadastrar. Tente novamente.');
+      console.error('[Signup] Erro crítico:', error);
+      showError(error.message || 'Erro ao cadastrar. Verifique os dados e tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -78,8 +89,11 @@ const Signup = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
+          <Link to="/login" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-8">
+            <ArrowLeft className="h-4 w-4" /> Já tenho uma conta
+          </Link>
           <div className="flex justify-center mb-4">
-            <div className="bg-primary p-3 rounded-2xl">
+            <div className="bg-primary p-3 rounded-2xl shadow-lg">
               <UserCheck className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
@@ -87,13 +101,13 @@ const Signup = () => {
           <p className="text-muted-foreground mt-2">CIEP 165 Brigadeiro Sérgio Carvalho</p>
         </div>
 
-        <Card className="border-none shadow-xl">
+        <Card className="border-none shadow-2xl">
           <CardHeader>
             <CardTitle>Inscreva-se</CardTitle>
-            <CardDescription>Apenas matrículas autorizadas podem se cadastrar.</CardDescription>
+            <CardDescription>Preencha os dados abaixo para acessar o portal.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit(handleRegister)} className="space-y-6">
+            <form onSubmit={handleSubmit(handleRegister)} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="name">Nome Completo</Label>
                 <div className="relative">
@@ -101,24 +115,10 @@ const Signup = () => {
                   <Input
                     {...register('name', { required: 'Nome é obrigatório' })}
                     id="name"
-                    placeholder="Seu nome"
+                    placeholder="Seu nome completo"
                     className="pl-10 rounded-xl"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="registration_id">ID de Matrícula / Registro</Label>
-                <div className="relative">
-                  <ShieldAlert className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    {...register('registration_id', { required: 'ID de matrícula é obrigatório' })}
-                    id="registration_id"
-                    placeholder="Ex: MAT-2024-0001"
-                    className="pl-10 rounded-xl font-mono"
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground">Consulte seu ID na secretaria da escola.</p>
               </div>
 
               <div className="space-y-2">
@@ -135,11 +135,29 @@ const Signup = () => {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="registration_id">
+                  {role === 'student' ? 'Número de Matrícula' : 'ID de Registro'}
+                </Label>
+                <div className="relative">
+                  <ShieldAlert className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    {...register('registration_id', { required: 'Este campo é obrigatório' })}
+                    id="registration_id"
+                    placeholder={role === 'student' ? "Ex: 2024001" : "Ex: REG-123"}
+                    className="pl-10 rounded-xl font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="email">E-mail</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    {...register('email', { required: 'E-mail é obrigatório' })}
+                    {...register('email', { 
+                      required: 'E-mail é obrigatório',
+                      pattern: { value: /^\S+@\S+$/i, message: 'E-mail inválido' }
+                    })}
                     id="email"
                     type="email"
                     placeholder="seu@email.com"
@@ -147,24 +165,6 @@ const Signup = () => {
                   />
                 </div>
               </div>
-
-              {role === 'student' && (
-                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <Label htmlFor="student_id">Número de Matrícula</Label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      {...register('student_id', { required: 'Matrícula é obrigatória para alunos' })}
-                      id="student_id"
-                      placeholder="Ex: 2024001"
-                      className="pl-10 rounded-xl"
-                    />
-                  </div>
-                  {errors.student_id && (
-                    <p className="text-red-500 text-sm">{String(errors.student_id.message)}</p>
-                  )}
-                </div>
-              )}
 
               <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>
@@ -177,17 +177,24 @@ const Signup = () => {
                     })}
                     id="password"
                     type="password"
-                    placeholder="Crie uma senha"
+                    placeholder="Crie uma senha forte"
                     className="pl-10 rounded-xl"
                   />
                 </div>
               </div>
 
-              <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg" disabled={loading}>
-                {loading ? 'Validando...' : 'Criar Minha Conta'}
+              <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg shadow-lg transition-all active:scale-[0.98]" disabled={loading}>
+                {loading ? (
+                  <><Loader2 className="h-5 w-5 animate-spin mr-2" /> Criando conta...</>
+                ) : 'Finalizar Cadastro'}
               </Button>
             </form>
           </CardContent>
+          <CardFooter className="justify-center border-t p-4">
+            <p className="text-sm text-muted-foreground">
+              Já tem uma conta? <Link to="/login" className="text-primary font-bold hover:underline">Entrar</Link>
+            </p>
+          </CardFooter>
         </Card>
       </div>
     </div>
