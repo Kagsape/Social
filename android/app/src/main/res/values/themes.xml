@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.CIEP165" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#2563eb</item>
+        <item name="android:statusBarColor">#2563eb</item>
+    </style>
+</resources>
