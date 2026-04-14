@@ -61,7 +61,6 @@ const Navbar = () => {
       { name: 'Ranking', path: '/leaderboard', icon: Trophy },
       { name: 'Projetos', path: '/projects', icon: FolderKanban },
       { name: 'Eventos', path: '/events', icon: Calendar },
-      { name: 'Ajuda', path: '/help', icon: HelpCircle },
     ];
 
     if (!userProfile) {
@@ -89,7 +88,7 @@ const Navbar = () => {
         { name: 'Feed', path: '/feed', icon: Users },
         { name: 'Mensagens', path: '/messages', icon: MessageSquare },
         { name: 'Admin', path: '/admin', icon: ShieldCheck },
-        { name: 'Cursos', path: '/courses', icon: BookOpen },
+        { name: 'Cursos', path: '/admin/courses', icon: BookOpen },
         { name: 'Laboratório', path: '/admin/lab', icon: Monitor }
       );
     }
@@ -101,11 +100,11 @@ const Navbar = () => {
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between gap-8">
+        <div className="flex items-center gap-6">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
+              <Button variant="ghost" size="icon" className="lg:hidden">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
@@ -138,32 +137,32 @@ const Navbar = () => {
             </SheetContent>
           </Sheet>
 
-          <Link to="/" className="flex items-center space-x-2">
+          <Link to="/" className="flex items-center space-x-2 shrink-0">
             <div className="bg-primary p-1.5 rounded-lg">
               <LayoutDashboard className="h-6 w-6 text-primary-foreground" />
             </div>
             <span className="font-bold text-xl tracking-tight hidden sm:inline-block">CIEP 165</span>
           </Link>
           
-          <div className="hidden xl:flex items-center gap-1">
+          <div className="hidden lg:flex items-center gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                  "flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
                   location.pathname === item.path ? "bg-accent text-accent-foreground" : "text-muted-foreground"
                 )}
               >
-                <item.icon className="h-3.5 w-3.5" />
+                <item.icon className="h-4 w-4" />
                 {item.name}
               </Link>
             ))}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-1 justify-end">
-          <div className="relative w-full max-w-[150px] lg:max-w-[200px] hidden md:block">
+        <div className="flex items-center gap-3 flex-1 justify-end">
+          <div className="relative w-full max-w-[200px] hidden md:block">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
@@ -172,7 +171,7 @@ const Navbar = () => {
             />
           </div>
           
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex items-center gap-2">
             <Button 
               variant="ghost" 
               size="icon" 
@@ -180,14 +179,6 @@ const Navbar = () => {
               onClick={toggleTheme}
             >
               {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="md:hidden h-9 w-9"
-              onClick={() => setIsSearchOpen(!isSearchOpen)}
-            >
-              <Search className="h-5 w-5" />
             </Button>
             {userProfile && <NotificationBell />}
             {userProfile ? (
@@ -202,27 +193,14 @@ const Navbar = () => {
               </Link>
             ) : (
               <Link to="/login">
-                <Button variant="ghost" size="icon" className="rounded-full border h-9 w-9">
-                  <User className="h-5 w-5" />
+                <Button variant="default" className="rounded-full px-6 h-9 text-sm font-semibold">
+                  Entrar
                 </Button>
               </Link>
             )}
           </div>
         </div>
       </div>
-      {isSearchOpen && (
-        <div className="md:hidden p-4 border-t bg-background animate-in slide-in-from-top duration-200">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Buscar cursos, posts..."
-              className="pl-10 rounded-xl bg-muted/50 border-none"
-              autoFocus
-            />
-          </div>
-        </div>
-      )}
     </nav>
   );
 };
