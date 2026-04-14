@@ -7,9 +7,7 @@ import {
   BookOpen, 
   Users, 
   Search, 
-  User, 
   ShieldCheck,
-  Monitor,
   Menu,
   Sun,
   Moon,
@@ -18,7 +16,9 @@ import {
   FolderKanban,
   Calendar,
   FileText,
-  GraduationCap
+  GraduationCap,
+  ChevronDown,
+  HelpCircle
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Navbar = () => {
   const location = useLocation();
@@ -63,39 +69,36 @@ const Navbar = () => {
     }
   };
   
-  const getNavItems = () => {
-    const commonItems = [
-      { name: 'Início', path: '/', icon: LayoutDashboard },
-      { name: 'Recursos', path: '/resources', icon: FileText },
-      { name: 'Ranking', path: '/leaderboard', icon: Trophy },
-      { name: 'Projetos', path: '/projects', icon: FolderKanban },
-      { name: 'Eventos', path: '/events', icon: Calendar },
-    ];
+  const mainItems = [
+    { name: 'Início', path: '/', icon: LayoutDashboard },
+    { name: 'Feed', path: '/feed', icon: Users, protected: true },
+    { name: 'Mensagens', path: '/messages', icon: MessageSquare, protected: true },
+    { name: 'Cursos', path: '/courses', icon: BookOpen, protected: true },
+  ];
 
-    if (!userProfile) return commonItems;
+  const secondaryItems = [
+    { name: 'Meu Aprendizado', path: '/dashboard', icon: GraduationCap, protected: true },
+    { name: 'Recursos', path: '/resources', icon: FileText },
+    { name: 'Ranking', path: '/leaderboard', icon: Trophy },
+    { name: 'Projetos', path: '/projects', icon: FolderKanban },
+    { name: 'Eventos', path: '/events', icon: Calendar },
+    { name: 'Ajuda', path: '/help', icon: HelpCircle },
+  ];
 
-    const roleBasedItems = [
-      { name: 'Feed', path: '/feed', icon: Users },
-      { name: 'Mensagens', path: '/messages', icon: MessageSquare },
-      { name: 'Cursos', path: '/courses', icon: BookOpen },
-      { name: 'Meu Aprendizado', path: '/dashboard', icon: GraduationCap }
-    ];
+  const adminItems = [];
+  if (userProfile?.role === 'teacher') {
+    adminItems.push({ name: 'Painel Professor', path: '/teacher', icon: LayoutDashboard });
+  } else if (userProfile?.role === 'admin') {
+    adminItems.push({ name: 'Admin', path: '/admin', icon: ShieldCheck });
+  }
 
-    if (userProfile.role === 'teacher') {
-      roleBasedItems.push({ name: 'Painel Professor', path: '/teacher', icon: LayoutDashboard });
-    } else if (userProfile.role === 'admin') {
-      roleBasedItems.push({ name: 'Admin', path: '/admin', icon: ShieldCheck });
-    }
-
-    return [...commonItems, ...roleBasedItems];
-  };
-
-  const navItems = getNavItems();
+  const allItems = [...mainItems, ...secondaryItems, ...adminItems];
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 flex h-16 items-center justify-between gap-4">
         <div className="flex items-center gap-4">
+          {/* Mobile Menu */}
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="lg:hidden">
@@ -110,21 +113,24 @@ const Navbar = () => {
                 </SheetTitle>
               </SheetHeader>
               <div className="flex flex-col gap-1 mt-6">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                      location.pathname === item.path 
-                        ? "bg-primary text-primary-foreground" 
-                        : "hover:bg-accent text-muted-foreground"
-                    )}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.name}
-                  </Link>
-                ))}
+                {allItems.map((item) => {
+                  if (item.protected && !userProfile) return null;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                        location.pathname === item.path 
+                          ? "bg-primary text-primary-foreground" 
+                          : "hover:bg-accent text-muted-foreground"
+                      )}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
               </div>
             </SheetContent>
           </Sheet>
@@ -134,19 +140,58 @@ const Navbar = () => {
             <span className="font-bold text-lg tracking-tight hidden sm:inline-block">CIEP 165</span>
           </Link>
           
+          {/* Desktop Menu */}
           <div className="hidden lg:flex items-center gap-1">
-            {navItems.slice(0, 5).map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors hover:bg-accent",
-                  location.pathname === item.path ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+            {mainItems.map((item) => {
+              if (item.protected && !userProfile) return null;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors hover:bg-accent",
+                    location.pathname === item.path ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                  )}
+                >
+                  {item.name}
+                </Link>
+              );
+            })}
+
+            {/* Dropdown for secondary items */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="rounded-full px-3 h-8 text-xs gap-1 text-muted-foreground">
+                  Mais <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48 rounded-xl shadow-xl border-none">
+                {secondaryItems.map((item) => {
+                  if (item.protected && !userProfile) return null;
+                  return (
+                    <DropdownMenuItem key={item.path} asChild>
+                      <Link to={item.path} className="flex items-center gap-2 cursor-pointer">
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.name}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
+                {adminItems.length > 0 && (
+                  <>
+                    <div className="h-px bg-muted my-1" />
+                    {adminItems.map((item) => (
+                      <DropdownMenuItem key={item.path} asChild>
+                        <Link to={item.path} className="flex items-center gap-2 cursor-pointer font-bold text-primary">
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.name}</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    ))}
+                  </>
                 )}
-              >
-                {item.name}
-              </Link>
-            ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
