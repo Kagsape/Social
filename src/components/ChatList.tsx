@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthProvider';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from '@/lib/utils';
+import { cn, isUserReallyOnline } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, MessageSquare } from 'lucide-react';
@@ -94,40 +94,44 @@ const ChatList = ({ onSelectConversation, selectedId }: ChatListProps) => {
 
   return (
     <div className="divide-y">
-      {conversations.map((conv) => (
-        <button
-          key={conv.id}
-          onClick={() => onSelectConversation(conv.id)}
-          className={cn(
-            "w-full flex items-center gap-3 p-4 transition-colors hover:bg-muted/50 text-left",
-            selectedId === conv.id && "bg-muted"
-          )}
-        >
-          <div className="relative">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={conv.other_user?.avatar_url} />
-              <AvatarFallback>{conv.other_user?.name?.charAt(0)}</AvatarFallback>
-            </Avatar>
-            {conv.other_user?.is_online && (
-              <span className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
+      {conversations.map((conv) => {
+        const isOnline = isUserReallyOnline(conv.other_user?.is_online, conv.other_user?.last_seen);
+        
+        return (
+          <button
+            key={conv.id}
+            onClick={() => onSelectConversation(conv.id)}
+            className={cn(
+              "w-full flex items-center gap-3 p-4 transition-colors hover:bg-muted/50 text-left",
+              selectedId === conv.id && "bg-muted"
             )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex justify-between items-baseline">
-              <h4 className="font-bold text-sm truncate">{conv.other_user?.name}</h4>
-              <span className="text-[10px] text-muted-foreground">
-                {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: true, locale: ptBR })}
-              </span>
+          >
+            <div className="relative">
+              <Avatar className="h-12 w-12">
+                <AvatarImage src={conv.other_user?.avatar_url} />
+                <AvatarFallback>{conv.other_user?.name?.charAt(0)}</AvatarFallback>
+              </Avatar>
+              {isOnline && (
+                <span className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
+              )}
             </div>
-            <p className={cn(
-              "text-xs truncate",
-              conv.other_user?.is_online ? "text-green-600 font-medium" : "text-muted-foreground"
-            )}>
-              {conv.other_user?.is_online ? 'Online agora' : 'Clique para ver as mensagens'}
-            </p>
-          </div>
-        </button>
-      ))}
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between items-baseline">
+                <h4 className="font-bold text-sm truncate">{conv.other_user?.name}</h4>
+                <span className="text-[10px] text-muted-foreground">
+                  {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: true, locale: ptBR })}
+                </span>
+              </div>
+              <p className={cn(
+                "text-xs truncate",
+                isOnline ? "text-green-600 font-medium" : "text-muted-foreground"
+              )}>
+                {isOnline ? 'Online agora' : 'Clique para ver as mensagens'}
+              </p>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 };

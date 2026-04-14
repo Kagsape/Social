@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Send, ArrowLeft } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { cn, isUserReallyOnline } from '@/lib/utils';
 
 interface ChatWindowProps {
   conversationId: string;
@@ -65,7 +65,6 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
 
     fetchData();
 
-    // Canal para mensagens e broadcast de "digitando"
     const channel = supabase
       .channel(`chat-${conversationId}`)
       .on('postgres_changes', { 
@@ -148,7 +147,6 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
         .update({ last_message_at: new Date().toISOString() })
         .eq('id', conversationId);
 
-      // Parar de digitar imediatamente ao enviar
       if (channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
@@ -167,9 +165,10 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
 
   if (loading) return <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
+  const isOnline = isUserReallyOnline(otherUser?.is_online, otherUser?.last_seen);
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900">
-      {/* Header */}
       <div className="p-4 border-b flex items-center gap-3">
         {onBack && (
           <Button variant="ghost" size="icon" onClick={onBack} className="md:hidden">
@@ -181,7 +180,7 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
             <AvatarImage src={otherUser?.avatar_url} />
             <AvatarFallback>{otherUser?.name?.charAt(0)}</AvatarFallback>
           </Avatar>
-          {otherUser?.is_online && (
+          {isOnline && (
             <span className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
           )}
         </div>
@@ -189,16 +188,15 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
           <h3 className="font-bold text-sm">{otherUser?.name}</h3>
           <p className={cn(
             "text-[10px] font-medium",
-            otherUser?.is_online ? "text-green-500" : "text-muted-foreground"
+            isOnline ? "text-green-500" : "text-muted-foreground"
           )}>
-            {otherUser?.is_online ? 'Online agora' : (
+            {isOnline ? 'Online agora' : (
               otherUser?.last_seen ? `Visto ${formatDistanceToNow(new Date(otherUser.last_seen), { addSuffix: true, locale: ptBR })}` : 'Offline'
             )}
           </p>
         </div>
       </div>
 
-      {/* Messages */}
       <div 
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
@@ -240,7 +238,6 @@ const ChatWindow = ({ conversationId, onBack }: ChatWindowProps) => {
         )}
       </div>
 
-      {/* Input */}
       <form onSubmit={handleSendMessage} className="p-4 border-t flex gap-2">
         <Input
           placeholder="Digite sua mensagem..."
