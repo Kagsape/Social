@@ -13,6 +13,7 @@ import DashboardStats from '@/components/DashboardStats';
 import AttendanceForm from '@/components/AttendanceForm';
 import GradeForm from '@/components/GradeForm';
 import AnnouncementForm from '@/components/AnnouncementForm';
+import ComputerReservationForm from '@/components/ComputerReservationForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const TeacherDashboard = () => {
@@ -42,7 +43,6 @@ const TeacherDashboard = () => {
   const fetchTeacherData = async () => {
     setLoading(true);
     try {
-      // Fetch courses taught by teacher
       const { data: teacherCourses, error: coursesError } = await supabase
         .from('courses')
         .select('*')
@@ -54,13 +54,11 @@ const TeacherDashboard = () => {
         setSelectedCourse(teacherCourses[0].id);
       }
 
-      // Fetch total students across all courses
       const { data: enrollments } = await supabase
         .from('enrollments')
         .select('student_id')
         .in('course_id', teacherCourses?.map(c => c.id) || []);
 
-      // Fetch active reservations
       const { data: reservations } = await supabase
         .from('lab_usage')
         .select('*')
@@ -112,7 +110,7 @@ const TeacherDashboard = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">Painel do Professor</h1>
-            <p className="text-muted-foreground">Gerencie suas turmas e conteúdo.</p>
+            <p className="text-muted-foreground">Gerencie suas turmas, conteúdo e reservas.</p>
           </div>
           <div className="flex items-center gap-2">
             <select 
@@ -140,6 +138,9 @@ const TeacherDashboard = () => {
               </TabsTrigger>
               <TabsTrigger value="grades" className="rounded-lg gap-2 whitespace-nowrap">
                 <GraduationCap className="h-4 w-4" /> Notas
+              </TabsTrigger>
+              <TabsTrigger value="reservations" className="rounded-lg gap-2 whitespace-nowrap">
+                <Monitor className="h-4 w-4" /> Reservar Lab
               </TabsTrigger>
             </TabsList>
           </div>
@@ -178,6 +179,10 @@ const TeacherDashboard = () => {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="reservations">
+            <ComputerReservationForm onReservationCreated={fetchTeacherData} />
           </TabsContent>
         </Tabs>
       </div>

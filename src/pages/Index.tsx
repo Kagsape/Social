@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop, BookOpen, Monitor } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/components/AuthProvider';
 
 const Index = () => {
+  const { userProfile } = useAuth();
   const [featuredCourses, setFeaturedCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [labStatus, setLabStatus] = useState({ total: 0, working: 0 });
@@ -17,7 +19,6 @@ const Index = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch featured courses with enrollment count
         const { data: courses } = await supabase
           .from('courses')
           .select(`
@@ -34,7 +35,6 @@ const Index = () => {
         
         setFeaturedCourses(processed);
 
-        // Fetch lab status
         const { data: computers } = await supabase
           .from('lab_computers')
           .select('status');
@@ -55,6 +55,8 @@ const Index = () => {
     fetchData();
   }, []);
 
+  const reservationLink = userProfile?.role === 'teacher' ? '/teacher' : '/dashboard';
+
   return (
     <Layout>
       {/* Lab Status Widget */}
@@ -69,9 +71,9 @@ const Index = () => {
             <Monitor className="h-4 w-4 text-muted-foreground" />
             <span className="font-medium whitespace-nowrap">{labStatus.working} / {labStatus.total} Máquinas Livres</span>
           </div>
-          <Link to="/dashboard">
+          <Link to={reservationLink}>
             <Button size="sm" variant="ghost" className="h-8 rounded-full text-[10px] md:text-xs gap-1">
-              Reservar <ArrowRight className="h-3 w-3" />
+              {userProfile?.role === 'teacher' ? 'Reservar Aula' : 'Ver Minhas Aulas'} <ArrowRight className="h-3 w-3" />
             </Button>
           </Link>
         </div>

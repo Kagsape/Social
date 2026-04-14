@@ -15,13 +15,13 @@ import {
   UserCheck,
   Clock,
   AlertCircle,
-  Loader2
+  Loader2,
+  Monitor
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import DashboardStats from '@/components/DashboardStats';
-import ComputerReservationForm from '@/components/ComputerReservationForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -36,6 +36,7 @@ const StudentDashboard = () => {
   const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
   const [grades, setGrades] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
+  const [myReservations, setMyReservations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,7 +48,6 @@ const StudentDashboard = () => {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      // 1. Buscar cursos matriculados
       const { data: enrollments } = await supabase
         .from('enrollments')
         .select(`*, courses (*)`)
@@ -55,7 +55,6 @@ const StudentDashboard = () => {
 
       setEnrolledCourses(enrollments || []);
 
-      // 2. Buscar notas
       const { data: gradesData } = await supabase
         .from('grades')
         .select(`*, courses (name)`)
@@ -64,7 +63,6 @@ const StudentDashboard = () => {
       
       setGrades(gradesData || []);
 
-      // 3. Buscar frequência
       const { data: attendanceData } = await supabase
         .from('attendance')
         .select(`*, courses (name)`)
@@ -73,18 +71,19 @@ const StudentDashboard = () => {
       
       setAttendance(attendanceData || []);
 
-      // 4. Buscar computadores disponíveis
+      // Buscar reservas onde o aluno está incluído (via texto no purpose)
+      const { data: reservations } = await supabase
+        .from('lab_usage')
+        .select(`*, lab_computers(name)`)
+        .ilike('purpose', `%${userProfile?.name}%`)
+        .eq('status', 'scheduled');
+
+      setMyReservations(reservations || []);
+
       const { data: computers } = await supabase
         .from('lab_computers')
         .select('*')
         .eq('status', 'working');
-
-      // 5. Buscar reservas ativas
-      const { data: reservations } = await supabase
-        .from('lab_usage')
-        .select('*')
-        .eq('teacher_id', user?.id)
-        .eq('status', 'scheduled');
 
       setStats({
         totalCourses: enrollments?.length || 0,
@@ -100,14 +99,10 @@ const StudentDashboard = () => {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'present':
-        return <Badge className="bg-green-500">Presente</Badge>;
-      case 'absent':
-        return <Badge variant="destructive">Falta</Badge>;
-      case 'late':
-        return <Badge className="bg-yellow-500">Atraso</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+      case 'present': return <Badge className="bg-green-500">Presente</Badge>;
+      case 'absent': return <Badge variant="destructive">Falta</Badge>;
+      case 'late': return <Badge className="bg-yellow-500">Atraso</Badge>;
+      default: return <Badge variant="outline">{status}</Badge>;
     }
   };
 
@@ -121,15 +116,13 @@ const StudentDashboard = () => {
     );
   }
 
-  const registrationId = userProfile?.role === 'teacher' ? userProfile?.teacher_id : userProfile?.student_id;
-
   return (
     <Layout>
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">Olá, {userProfile?.name?.split(' ')[0]}!</h1>
-            <p className="text-muted-foreground">Seu registro: <span className="font-mono font-bold text-primary">{registrationId || 'N/A'}</span></p>
+            <p className="text-muted-foreground">Seu registro: <span className="font-mono font-bold text-primary">{userProfile?.student_id || 'N/A'}</span></p>
           </div>
           <Link to="/profile">
             <Button variant="outline" className="rounded-full">Ver Perfil Completo</Button>
@@ -243,7 +236,29 @@ const StudentDashboard = () => {
                 <p className="text-sm opacity-90">Acompanhe seu progresso e frequência em todos os cursos que você está participando.</p>
               </CardContent>
             </Card>
-            <ComputerReservationForm onReservationCreated={fetchDashboardData} />
+            
+            <Card className="border-none shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Monitor className="h-5 w-5 text-primary" />
+                  Minhas Aulas no Lab
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {myReservations.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhuma aula agendada para você.</p>
+                ) : (
+                  myReservations.map(res => (
+                    <div key={res.id} className="p-3 rounded-lg border bg-slate-50 dark:bg-slate-800/50 space-y-1">
+                      <p className="font-bold text-sm">{res.lab_computers?.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(res.start_time), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
