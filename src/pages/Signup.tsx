@@ -25,35 +25,30 @@ const Signup = () => {
   const [role, setRole] = useState<'student' | 'teacher'>('student');
 
   const handleRegister = async (data: any) => {
-    console.log('[Signup] Iniciando processo de cadastro...', { email: data.email, role });
+    console.log('[Signup] Iniciando cadastro...', { email: data.email, role, id: data.registration_id });
     setLoading(true);
     
     try {
-      // 1. Verificar Whitelist
-      console.log('[Signup] Passo 1: Verificando Whitelist para ID:', data.registration_id);
-      try {
-        const { data: whitelistEntry, error: whitelistError } = await supabase
-          .from('registration_whitelist')
-          .select('*')
-          .eq('registration_id', data.registration_id)
-          .eq('role', role)
-          .maybeSingle();
+      // 1. Verificar Whitelist (sem filtrar por role primeiro para dar erro melhor)
+      const { data: whitelistEntry, error: whitelistError } = await supabase
+        .from('registration_whitelist')
+        .select('*')
+        .eq('registration_id', data.registration_id)
+        .maybeSingle();
 
-        if (whitelistError) {
-          console.warn('[Signup] Erro ao acessar tabela whitelist (pode não existir):', whitelistError);
-        } else if (!whitelistEntry) {
-          console.error('[Signup] ID não encontrado na whitelist');
-          throw new Error(`O ID de ${role === 'student' ? 'matrícula' : 'registro'} informado não foi pré-autorizado.`);
-        } else {
-          console.log('[Signup] Whitelist verificada com sucesso:', whitelistEntry.name);
-        }
-      } catch (err: any) {
-        if (err.message?.includes('não foi pré-autorizado')) throw err;
-        console.log('[Signup] Prosseguindo sem verificação de whitelist (tabela ausente).');
+      if (whitelistError) {
+        console.warn('[Signup] Erro ao consultar whitelist:', whitelistError);
+      } else if (!whitelistEntry) {
+        // Se não achou nada com esse ID
+        throw new Error(`O ID "${data.registration_id}" não foi encontrado na lista de autorizados. Verifique se digitou corretamente no painel admin.`);
+      } else if (whitelistEntry.role !== role) {
+        // Se achou o ID mas o cargo é diferente
+        throw new Error(`Este ID está autorizado apenas para o cargo de "${whitelistEntry.role === 'student' ? 'Aluno' : 'Professor'}". Você selecionou "${role === 'student' ? 'Aluno' : 'Professor'}".`);
       }
 
+      console.log('[Signup] Whitelist validada para:', whitelistEntry.name);
+
       // 2. Cadastro no Auth
-      console.log('[Signup] Passo 2: Criando usuário no Supabase Auth...');
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -66,26 +61,14 @@ const Signup = () => {
         },
       });
 
-      if (authError) {
-        console.error('[Signup] Erro no Supabase Auth:', authError);
-        throw authError;
-      }
+      if (authError) throw authError;
 
-      console.log('[Signup] Usuário criado com sucesso no Auth:', authData.user?.id);
-
-      // 3. Finalização
-      showSuccess('Cadastro realizado com sucesso!');
+      showSuccess('Cadastro realizado! Verifique seu e-mail ou faça login.');
+      navigate('/login');
       
-      if (authData.session) {
-        console.log('[Signup] Sessão ativa detectada, redirecionando para /feed');
-        navigate('/feed');
-      } else {
-        console.log('[Signup] Confirmação de e-mail pode ser necessária ou login manual, redirecionando para /login');
-        navigate('/login');
-      }
     } catch (error: any) {
-      console.error('[Signup] ERRO CRÍTICO NO CADASTRO:', error);
-      showError(error.message || 'Erro ao realizar cadastro. Verifique o console.');
+      console.error('[Signup] Erro no processo:', error);
+      showError(error.message || 'Erro ao realizar cadastro.');
     } finally {
       setLoading(false);
     }
@@ -96,7 +79,7 @@ const Signup = () => {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <Link to="/login" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-8">
-            <ArrowLeft className="h-4 w-4" /> Já tenho uma conta
+            <ArrowLeft className="h-4 w-4" /> Voltar para Login
           </Link>
           <div className="flex justify-center mb-4">
             <div className="bg-primary p-3 rounded-2xl shadow-lg">
@@ -104,13 +87,13 @@ const Signup = () => {
             </div>
           </div>
           <h2 className="text-3xl font-bold tracking-tight">Criar Conta</h2>
-          <p className="text-muted-foreground mt-2">CIEP 165 Brigadeiro Sérgio Carvalho</p>
+          <p className="text-muted-foreground mt-2">CIEP 165 - Portal de Tecnologia</p>
         </div>
 
         <Card className="border-none shadow-2xl">
           <CardHeader>
-            <CardTitle>Inscreva-se</CardTitle>
-            <CardDescription>Preencha os dados abaixo para acessar o portal.</CardDescription>
+            <CardTitle>Cadastro</CardTitle>
+            <CardDescription>Use o ID que você autorizou no painel admin.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(handleRegister)} className="space-y-5">
@@ -121,7 +104,7 @@ const Signup = () => {
                   <Input
                     {...register('name', { required: 'Nome é obrigatório' })}
                     id="name"
-                    placeholder="Seu nome completo"
+                    placeholder="Seu nome"
                     className="pl-10 rounded-xl"
                   />
                 </div>
@@ -131,7 +114,7 @@ const Signup = () => {
                 <Label>Tipo de Conta</Label>
                 <Select value={role} onValueChange={(value: 'student' | 'teacher') => setRole(value)}>
                   <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Selecione o tipo de conta" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="student">Aluno</SelectItem>
@@ -141,15 +124,13 @@ const Signup = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="registration_id">
-                  {role === 'student' ? 'Número de Matrícula' : 'ID de Registro'}
-                </Label>
+                <Label htmlFor="registration_id">ID Autorizado (Matrícula/Registro)</Label>
                 <div className="relative">
                   <ShieldAlert className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    {...register('registration_id', { required: 'Este campo é obrigatório' })}
+                    {...register('registration_id', { required: 'ID é obrigatório' })}
                     id="registration_id"
-                    placeholder={role === 'student' ? "Ex: 2024001" : "Ex: REG-123"}
+                    placeholder="O mesmo ID que você salvou no Admin"
                     className="pl-10 rounded-xl font-mono"
                   />
                 </div>
@@ -160,10 +141,7 @@ const Signup = () => {
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    {...register('email', { 
-                      required: 'E-mail é obrigatório',
-                      pattern: { value: /^\S+@\S+$/i, message: 'E-mail inválido' }
-                    })}
+                    {...register('email', { required: 'E-mail é obrigatório' })}
                     id="email"
                     type="email"
                     placeholder="seu@email.com"
@@ -177,30 +155,20 @@ const Signup = () => {
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    {...register('password', { 
-                      required: 'Senha é obrigatória',
-                      minLength: { value: 6, message: 'Mínimo de 6 caracteres' }
-                    })}
+                    {...register('password', { required: 'Senha é obrigatória', minLength: 6 })}
                     id="password"
                     type="password"
-                    placeholder="Crie uma senha forte"
+                    placeholder="Mínimo 6 caracteres"
                     className="pl-10 rounded-xl"
                   />
                 </div>
               </div>
 
-              <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg shadow-lg" disabled={loading}>
-                {loading ? (
-                  <><Loader2 className="h-5 w-5 animate-spin mr-2" /> Criando conta...</>
-                ) : 'Finalizar Cadastro'}
+              <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg" disabled={loading}>
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Criar Conta'}
               </Button>
             </form>
           </CardContent>
-          <CardFooter className="justify-center border-t p-4">
-            <p className="text-sm text-muted-foreground">
-              Já tem uma conta? <Link to="/login" className="text-primary font-bold hover:underline">Entrar</Link>
-            </p>
-          </CardFooter>
         </Card>
       </div>
     </div>
