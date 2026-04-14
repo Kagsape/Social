@@ -30,13 +30,18 @@ const Login = () => {
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message === 'Invalid login credentials') {
+          throw new Error('E-mail ou senha incorretos. Se você acabou de se cadastrar, verifique se a conta foi criada com sucesso.');
+        }
+        throw error;
+      }
 
       showSuccess('Login bem-sucedido! Bem-vindo de volta.');
       navigate(from, { replace: true });
     } catch (error: any) {
       console.error('Erro ao fazer login:', error);
-      showError(error.message || 'Email ou senha inválidos. Tente novamente.');
+      showError(error.message || 'Erro ao acessar conta. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -82,12 +87,14 @@ const Login = () => {
                 <Label htmlFor="email">E-mail</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input                    id="email"
+                  <Input
+                    id="email"
                     type="email"
                     placeholder="seu@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    required                    className="pl-10 rounded-xl"
+                    required
+                    className="pl-10 rounded-xl"
                   />
                 </div>
               </div>
@@ -119,7 +126,8 @@ const Login = () => {
                 <span className="bg-background px-2 text-muted-foreground">Ou continue com</span>
               </div>
             </div>
-            <Button               variant="outline" 
+            <Button 
+              variant="outline" 
               className="w-full rounded-xl" 
               onClick={handleGoogleSignIn}
               disabled={loading}
@@ -138,7 +146,7 @@ const Login = () => {
                   fill="#FBBC05"
                 />
                 <path
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   fill="#EA4335"
                 />
               </svg>
