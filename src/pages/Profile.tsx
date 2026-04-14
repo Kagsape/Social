@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
-import { User, Camera, Save, LogOut, MapPin, FileText } from 'lucide-react';
+import { User, Camera, Save, LogOut, MapPin, FileText, Hash } from 'lucide-react';
 
 const Profile = () => {
   const { user, userProfile, refreshProfile, signOut } = useAuth();
@@ -19,6 +19,7 @@ const Profile = () => {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bio, setBio] = useState('');
   const [location, setLocation] = useState('');
+  const [studentId, setStudentId] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -27,6 +28,7 @@ const Profile = () => {
       setAvatarUrl(userProfile.avatar_url || '');
       setBio(userProfile.bio || '');
       setLocation(userProfile.location || '');
+      setStudentId(userProfile.student_id || '');
     }
   }, [userProfile]);
 
@@ -42,7 +44,8 @@ const Profile = () => {
           name,
           avatar_url: avatarUrl,
           bio,
-          location
+          location,
+          student_id: studentId
         })
         .eq('id', user.id);
 
@@ -105,6 +108,22 @@ const Profile = () => {
                     </div>
                   </div>
                 </div>
+
+                {userProfile?.role === 'student' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="student_id">Número de Matrícula</Label>
+                    <div className="relative">
+                      <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        id="student_id" 
+                        value={studentId} 
+                        onChange={(e) => setStudentId(e.target.value)} 
+                        placeholder="Seu número de matrícula" 
+                        className="pl-10 font-mono"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="avatar">URL da Foto de Perfil</Label>

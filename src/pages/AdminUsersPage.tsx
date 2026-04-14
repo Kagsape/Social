@@ -16,7 +16,8 @@ import {
   User, 
   GraduationCap,
   Mail,
-  Filter
+  Filter,
+  Hash
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -99,7 +100,8 @@ const AdminUsersPage = () => {
 
   const filteredUsers = users.filter(user =>
     user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.student_id?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getRoleBadge = (role: string) => {
@@ -177,7 +179,7 @@ const AdminUsersPage = () => {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input 
-                  placeholder="Buscar por nome ou e-mail..." 
+                  placeholder="Buscar por nome, e-mail ou matrícula..." 
                   className="pl-10"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -216,9 +218,9 @@ const AdminUsersPage = () => {
                   <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
                     <tr>
                       <th className="px-4 py-3 rounded-l-lg">Usuário</th>
+                      <th className="px-4 py-3">Matrícula</th>
                       <th className="px-4 py-3">Cargo</th>
                       <th className="px-4 py-3">E-mail</th>
-                      <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3 rounded-r-lg text-right">Ações</th>
                     </tr>
                   </thead>
@@ -234,13 +236,18 @@ const AdminUsersPage = () => {
                             <span className="font-medium">{user.name}</span>
                           </div>
                         </td>
+                        <td className="px-4 py-4">
+                          {user.student_id ? (
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <Hash className="h-3 w-3" />
+                              <span className="font-mono">{user.student_id}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground/30">-</span>
+                          )}
+                        </td>
                         <td className="px-4 py-4">{getRoleBadge(user.role)}</td>
                         <td className="px-4 py-4 text-muted-foreground">{user.email}</td>
-                        <td className="px-4 py-4">
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
-                            Ativo
-                          </Badge>
-                        </td>
                         <td className="px-4 py-4 text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>

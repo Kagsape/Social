@@ -73,7 +73,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: userId,
             name: currentUser.user_metadata?.name || currentUser.email?.split('@')[0] || 'Usuário',
             email: currentUser.email,
-            role: currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student'
+            role: currentUser.user_metadata?.role || (currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student'),
+            student_id: currentUser.user_metadata?.student_id || null
           })
           .select('*')
           .single();

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { User, Mail, Lock, UserCheck } from 'lucide-react';
+import { User, Mail, Lock, UserCheck, Hash } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Select,
@@ -34,7 +34,8 @@ const Signup = () => {
           emailRedirectTo: `${window.location.origin}/login`,
           data: {
             name: data.name,
-            role: role
+            role: role,
+            student_id: role === 'student' ? data.student_id : null
           }
         },
       });
@@ -116,6 +117,24 @@ const Signup = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {role === 'student' && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <Label htmlFor="student_id">Número de Matrícula</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      {...register('student_id', { required: 'Matrícula é obrigatória para alunos' })}
+                      id="student_id"
+                      placeholder="Ex: 2024001"
+                      className="pl-10 rounded-xl"
+                    />
+                  </div>
+                  {errors.student_id && (
+                    <p className="text-red-500 text-sm">{String(errors.student_id.message)}</p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>
