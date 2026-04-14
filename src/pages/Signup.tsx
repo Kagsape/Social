@@ -67,13 +67,16 @@ const Signup = () => {
       });
 
       if (authError) {
+        if (authError.message.includes('rate limit')) {
+          throw new Error('Muitas tentativas seguidas. Por favor, aguarde 5 minutos e tente novamente.');
+        }
         if (authError.message.includes('already registered')) {
           throw new Error('Este e-mail já está em uso.');
         }
         throw authError;
       }
 
-      showSuccess('Conta criada com sucesso! Agora você pode fazer login.');
+      showSuccess('Conta criada com sucesso! Verifique seu e-mail ou faça login.');
       navigate('/login');
       
     } catch (error: any) {
