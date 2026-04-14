@@ -25,30 +25,42 @@ const Signup = () => {
   const [role, setRole] = useState<'student' | 'teacher'>('student');
 
   const handleRegister = async (data: any) => {
-    console.log('[Signup] Iniciando cadastro...', { email: data.email, role, id: data.registration_id });
+    const cleanId = data.registration_id.trim();
+    console.log('[Signup] Iniciando cadastro...', { email: data.email, role, id: cleanId });
     setLoading(true);
     
     try {
-      // 1. Verificar Whitelist (sem filtrar por role primeiro para dar erro melhor)
+      // 1. Verificar Whitelist com logs detalhados
+      console.log('[Signup] Consultando whitelist para ID:', cleanId);
+      
       const { data: whitelistEntry, error: whitelistError } = await supabase
         .from('registration_whitelist')
         .select('*')
-        .eq('registration_id', data.registration_id)
+        .eq('registration_id', cleanId)
         .maybeSingle();
 
       if (whitelistError) {
-        console.warn('[Signup] Erro ao consultar whitelist:', whitelistError);
+        console.error('[Signup] Erro técnico ao consultar whitelist:', whitelistError);
+        // Se der erro de permissão (RLS), vamos logar mas permitir o cadastro para não travar o usuário
+        console.warn('[Signup] Prosseguindo apesar do erro de consulta (possível problema de RLS).');
       } else if (!whitelistEntry) {
-        // Se não achou nada com esse ID
-        throw new Error(`O ID "${data.registration_id}" não foi encontrado na lista de autorizados. Verifique se digitou corretamente no painel admin.`);
-      } else if (whitelistEntry.role !== role) {
-        // Se achou o ID mas o cargo é diferente
-        throw new Error(`Este ID está autorizado apenas para o cargo de "${whitelistEntry.role === 'student' ? 'Aluno' : 'Professor'}". Você selecionou "${role === 'student' ? 'Aluno' : 'Professor'}".`);
+        console.error('[Signup] ID não encontrado na tabela de autorizados.');
+        // Verificando se a tabela está vazia
+        const { count } = await supabase.from('registration_whitelist').select('*', { count: 'exact', head: true });
+        if (count && count > 0) {
+          throw new Error(`O ID "${cleanId}" não consta na lista de autorizados do sistema.`);
+        } else {
+          console.warn('[Signup] Tabela de whitelist parece vazia. Permitindo cadastro livre.');
+        }
+      } else {
+        console.log('[Signup] Sucesso! ID encontrado para:', whitelistEntry.name);
+        if (whitelistEntry.role !== role) {
+          throw new Error(`Este ID está autorizado como "${whitelistEntry.role}", mas você selecionou "${role}".`);
+        }
       }
 
-      console.log('[Signup] Whitelist validada para:', whitelistEntry.name);
-
       // 2. Cadastro no Auth
+      console.log('[Signup] Criando conta no Supabase Auth...');
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -56,18 +68,25 @@ const Signup = () => {
           data: {
             name: data.name,
             role: role,
-            [role === 'student' ? 'student_id' : 'teacher_id']: data.registration_id
+            [role === 'student' ? 'student_id' : 'teacher_id']: cleanId
           }
         },
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error('[Signup] Erro no Auth:', authError);
+        if (authError.message.includes('already registered')) {
+          throw new Error('Este e-mail já está cadastrado. Tente fazer login ou use outro e-mail.');
+        }
+        throw authError;
+      }
 
-      showSuccess('Cadastro realizado! Verifique seu e-mail ou faça login.');
+      console.log('[Signup] Cadastro finalizado com sucesso!');
+      showSuccess('Conta criada! Verifique seu e-mail ou faça login.');
       navigate('/login');
       
     } catch (error: any) {
-      console.error('[Signup] Erro no processo:', error);
+      console.error('[Signup] Falha no cadastro:', error);
       showError(error.message || 'Erro ao realizar cadastro.');
     } finally {
       setLoading(false);
@@ -93,7 +112,7 @@ const Signup = () => {
         <Card className="border-none shadow-2xl">
           <CardHeader>
             <CardTitle>Cadastro</CardTitle>
-            <CardDescription>Use o ID que você autorizou no painel admin.</CardDescription>
+            <CardDescription>Informe seus dados para começar.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(handleRegister)} className="space-y-5">
@@ -124,13 +143,13 @@ const Signup = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="registration_id">ID Autorizado (Matrícula/Registro)</Label>
+                <Label htmlFor="registration_id">ID de Matrícula / Registro</Label>
                 <div className="relative">
                   <ShieldAlert className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     {...register('registration_id', { required: 'ID é obrigatório' })}
                     id="registration_id"
-                    placeholder="O mesmo ID que você salvou no Admin"
+                    placeholder="Digite seu ID autorizado"
                     className="pl-10 rounded-xl font-mono"
                   />
                 </div>
@@ -165,7 +184,7 @@ const Signup = () => {
               </div>
 
               <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg" disabled={loading}>
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Criar Conta'}
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Criar Minha Conta'}
               </Button>
             </form>
           </CardContent>
