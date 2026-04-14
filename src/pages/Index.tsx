@@ -58,19 +58,19 @@ const Index = () => {
   return (
     <Layout>
       {/* Lab Status Widget */}
-      <div className="mb-8 flex justify-center">
-        <div className="bg-white dark:bg-slate-900 px-6 py-3 rounded-full border shadow-sm flex items-center gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
+      <div className="mb-8 flex justify-center px-4">
+        <div className="bg-white dark:bg-slate-900 px-4 md:px-6 py-3 rounded-2xl md:rounded-full border shadow-sm flex flex-wrap items-center justify-center gap-3 md:gap-6 animate-in fade-in slide-in-from-top-4 duration-700 max-w-full">
           <div className="flex items-center gap-2">
             <div className={`h-3 w-3 rounded-full ${labStatus.working > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-            <span className="text-sm font-bold">Status do Laboratório</span>
+            <span className="text-xs md:text-sm font-bold whitespace-nowrap">Status do Laboratório</span>
           </div>
-          <div className="h-4 w-px bg-border" />
-          <div className="flex items-center gap-2 text-sm">
+          <div className="hidden md:block h-4 w-px bg-border" />
+          <div className="flex items-center gap-2 text-xs md:text-sm">
             <Monitor className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">{labStatus.working} / {labStatus.total} Máquinas Livres</span>
+            <span className="font-medium whitespace-nowrap">{labStatus.working} / {labStatus.total} Máquinas Livres</span>
           </div>
           <Link to="/dashboard">
-            <Button size="sm" variant="ghost" className="h-8 rounded-full text-xs gap-1">
+            <Button size="sm" variant="ghost" className="h-8 rounded-full text-[10px] md:text-xs gap-1">
               Reservar <ArrowRight className="h-3 w-3" />
             </Button>
           </Link>
@@ -82,24 +82,24 @@ const Index = () => {
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
         </div>
-        <div className="relative z-10 px-8 md:px-16 max-w-3xl">
+        <div className="relative z-10 px-6 md:px-16 max-w-3xl">
           <Badge className="mb-4 bg-blue-500/20 text-blue-300 border-blue-500/30 backdrop-blur-md">
             CIEP 165 Brigadeiro Sérgio Carvalho
           </Badge>
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
+          <h1 className="text-3xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
             Sala de Informática: <span className="text-blue-400">Inovação e Futuro</span>
           </h1>
-          <p className="text-lg md:text-xl text-slate-300 mb-8 max-w-xl">
+          <p className="text-base md:text-xl text-slate-300 mb-8 max-w-xl">
             Bem-vindo ao portal de tecnologia do CIEP 165. Aqui você aprende programação, robótica e domina o mundo digital.
           </p>
           <div className="flex flex-wrap gap-4">
             <Link to="/login">
-              <Button size="lg" className="rounded-full px-8 bg-blue-600 hover:bg-blue-700 text-white border-none">
+              <Button size="lg" className="rounded-full px-6 md:px-8 bg-blue-600 hover:bg-blue-700 text-white border-none text-sm md:text-base">
                 Acessar Minha Conta
               </Button>
             </Link>
             <Link to="/courses">
-              <Button size="lg" variant="outline" className="rounded-full px-8 bg-white/5 backdrop-blur-sm border-white/20 hover:bg-white/10">
+              <Button size="lg" variant="outline" className="rounded-full px-6 md:px-8 bg-white/5 backdrop-blur-sm border-white/20 hover:bg-white/10 text-sm md:text-base">
                 Ver Cursos
               </Button>
             </Link>
@@ -118,13 +118,13 @@ const Index = () => {
 
       {/* Featured Courses */}
       <section className="mb-16">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">Cursos em Destaque</h2>
-            <p className="text-muted-foreground">Comece sua jornada tecnológica hoje mesmo.</p>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Cursos em Destaque</h2>
+            <p className="text-muted-foreground text-sm md:text-base">Comece sua jornada tecnológica hoje mesmo.</p>
           </div>
           <Link to="/courses">
-            <Button variant="ghost" className="group">
+            <Button variant="ghost" className="group text-sm">
               Ver todos <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
             </Button>
           </Link>
@@ -160,30 +160,30 @@ const Index = () => {
       </section>
 
       {/* Community Section */}
-      <section className="bg-white dark:bg-slate-900 rounded-3xl p-8 md:p-12 border shadow-sm">
-        <div className="grid md:grid-cols-2 gap-12 items-center">
+      <section className="bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-12 border shadow-sm">
+        <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center">
           <div>
-            <h2 className="text-3xl font-bold mb-6">Nossa Sala de Informática</h2>
-            <p className="text-lg text-muted-foreground mb-8">
+            <h2 className="text-2xl md:text-3xl font-bold mb-6">Nossa Sala de Informática</h2>
+            <p className="text-sm md:text-lg text-muted-foreground mb-8">
               O CIEP 165 oferece um espaço moderno para que os alunos possam explorar ferramentas digitais, desde o básico da informática até a programação avançada.
             </p>
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
-                  <Users className="text-blue-600 h-6 w-6" />
+                  <Users className="text-blue-600 h-5 w-5 md:h-6 md:w-6" />
                 </div>
                 <div>
-                  <h4 className="font-semibold">Aprendizado Colaborativo</h4>
-                  <p className="text-sm text-muted-foreground">Alunos ajudando alunos a crescer.</p>
+                  <h4 className="font-semibold text-sm md:text-base">Aprendizado Colaborativo</h4>
+                  <p className="text-xs md:text-sm text-muted-foreground">Alunos ajudando alunos a crescer.</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-lg">
-                  <Globe className="text-green-600 h-6 w-6" />
+                  <Globe className="text-green-600 h-5 w-5 md:h-6 md:w-6" />
                 </div>
                 <div>
-                  <h4 className="font-semibold">Conexão com o Mundo</h4>
-                  <p className="text-sm text-muted-foreground">Acesso ilimitado ao conhecimento global.</p>
+                  <h4 className="font-semibold text-sm md:text-base">Conexão com o Mundo</h4>
+                  <p className="text-xs md:text-sm text-muted-foreground">Acesso ilimitado ao conhecimento global.</p>
                 </div>
               </div>
             </div>
@@ -192,7 +192,7 @@ const Index = () => {
             <img 
               src="https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&auto=format&fit=crop&q=60" 
               alt="Alunos estudando" 
-              className="rounded-2xl shadow-2xl"
+              className="rounded-2xl shadow-2xl w-full h-auto"
             />
           </div>
         </div>
