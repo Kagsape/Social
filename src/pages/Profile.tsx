@@ -19,7 +19,7 @@ const Profile = () => {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [bio, setBio] = useState('');
   const [location, setLocation] = useState('');
-  const [studentId, setStudentId] = useState('');
+  const [displayId, setDisplayId] = useState('');
   const [loading, setLoading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -29,7 +29,8 @@ const Profile = () => {
       setAvatarUrl(userProfile.avatar_url || '');
       setBio(userProfile.bio || '');
       setLocation(userProfile.location || '');
-      setStudentId(userProfile.student_id || '');
+      // Pega o ID de estudante ou de professor, o que estiver preenchido
+      setDisplayId(userProfile.student_id || userProfile.teacher_id || '');
     }
   }, [userProfile]);
 
@@ -46,7 +47,6 @@ const Profile = () => {
           avatar_url: avatarUrl.trim(),
           bio: bio.trim(),
           location: location.trim(),
-          // Removido student_id do update para garantir que não seja alterado via formulário
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);
@@ -66,8 +66,6 @@ const Profile = () => {
   const focusAvatarInput = () => {
     avatarInputRef.current?.focus();
   };
-
-  const registrationId = userProfile?.role === 'teacher' ? userProfile?.teacher_id : userProfile?.student_id;
 
   return (
     <Layout>
@@ -139,14 +137,14 @@ const Profile = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="student_id" className="flex items-center gap-2">
-                    Número de Matrícula <Lock className="h-3 w-3 text-muted-foreground" />
+                  <Label htmlFor="display_id" className="flex items-center gap-2">
+                    Número de Matrícula / ID <Lock className="h-3 w-3 text-muted-foreground" />
                   </Label>
                   <div className="relative">
                     <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      id="student_id" 
-                      value={studentId} 
+                      id="display_id" 
+                      value={displayId} 
                       disabled
                       className="pl-10 font-mono bg-slate-50 cursor-not-allowed opacity-70"
                     />
