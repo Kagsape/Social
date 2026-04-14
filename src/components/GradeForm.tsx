@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Save } from 'lucide-react';
+import { Plus, Trash2, Save, Loader2 } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
@@ -51,23 +51,27 @@ const GradeForm: React.FC<GradeFormProps> = ({ courseId, students, onGradesSaved
   };
 
   const saveGrades = async () => {
-    if (!user) return;
+    if (!user || !courseId) return;
+
+    const validGrades = grades.filter(g => g.studentId && g.assignmentName && g.grade);
+    
+    if (validGrades.length === 0) {
+      showError('Preencha pelo menos uma nota válida.');
+      return;
+    }
 
     setSaving(true);
     try {
-      const validGrades = grades.filter(g => g.studentId && g.assignmentName && g.grade);
-
       const records = validGrades.map(grade => ({
         student_id: grade.studentId,
         course_id: courseId,
-        assignment_name: grade.assignmentName,
+        assignment_name: grade.assignmentName.trim(),
         grade: parseFloat(grade.grade),
         max_grade: parseFloat(grade.maxGrade) || 100,
-        comments: grade.comments || null,
+        comments: grade.comments?.trim() || null,
         teacher_id: user.id
       }));
 
-      // Upsert grades (insert or update)
       const { error } = await supabase
         .from('grades')
         .upsert(records, {
@@ -76,111 +80,123 @@ const GradeForm: React.FC<GradeFormProps> = ({ courseId, students, onGradesSaved
 
       if (error) throw error;
 
+      // Notificar alunos individualmente
+      const notifications = validGrades.map(grade => ({
+        user_id: grade.studentId,
+        actor_id: user.id,
+        type: 'grade',
+        message: `Sua nota em "${grade.assignmentName}" foi lançada.`
+      }));
+
+      await supabase.from('notifications').insert(notifications);
+
       showSuccess('Notas salvas com sucesso!');
       setGrades([]);
       onGradesSaved?.();
-    } catch (error) {
-      console.error('Error saving grades:', error);
-      showError('Erro ao salvar notas');
+    } catch (error: any) {
+      console.error('[Grades] Erro ao salvar:', error);
+      showError(`Erro ao salvar notas: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>Gerenciar Notas</span>
-          <Button onClick={addGradeEntry} size="sm" className="gap-2">
-            <Plus className="h-4 w-4" /> Adicionar Nota
-          </Button>
-        </CardTitle>
+    <Card className="border-none shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-lg font-bold">Lançamento de Notas</CardTitle>
+        <Button onClick={addGradeEntry} size="sm" className="gap-2 rounded-xl">
+          <Plus className="h-4 w-4" /> Adicionar Nota
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {grades.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            Clique em "Adicionar Nota" para começar
+          <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-2xl">
+            Nenhuma nota pendente de envio.
           </div>
         ) : (
-          grades.map((gradeEntry, index) => (
-            <div key={index} className="p-4 border rounded-lg space-y-4">
-              <div className="flex justify-between items-start">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
-                  <div className="space-y-2">
-                    <Label htmlFor={`student-${index}`}>Aluno</Label>
-                    <select
-                      id={`student-${index}`}
-                      value={gradeEntry.studentId}
-                      onChange={(e) => updateGradeEntry(index, 'studentId', e.target.value)}
-                      className="w-full p-2 border rounded-md"
-                    >
-                      <option value="">Selecione um aluno</option>
-                      {students.map(student => (
-                        <option key={student.id} value={student.id}>{student.name}</option>
-                      ))}
-                    </select>
+          <div className="space-y-4">
+            {grades.map((gradeEntry, index) => (
+              <div key={index} className="p-4 border rounded-2xl bg-slate-50/50 dark:bg-slate-800/30 space-y-4 animate-in fade-in slide-in-from-top-2">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+                    <div className="space-y-2">
+                      <Label>Aluno</Label>
+                      <select
+                        value={gradeEntry.studentId}
+                        onChange={(e) => updateGradeEntry(index, 'studentId', e.target.value)}
+                        className="w-full p-2 border rounded-xl bg-background text-sm"
+                      >
+                        <option value="">Selecione um aluno</option>
+                        {students.map(student => (
+                          <option key={student.id} value={student.id}>{student.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Atividade</Label>
+                      <Input
+                        placeholder="Ex: Prova 1, Trabalho..."
+                        value={gradeEntry.assignmentName}
+                        onChange={(e) => updateGradeEntry(index, 'assignmentName', e.target.value)}
+                        className="rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nota</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        placeholder="0.0"
+                        value={gradeEntry.grade}
+                        onChange={(e) => updateGradeEntry(index, 'grade', e.target.value)}
+                        className="rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nota Máxima</Label>
+                      <Input
+                        type="number"
+                        value={gradeEntry.maxGrade}
+                        onChange={(e) => updateGradeEntry(index, 'maxGrade', e.target.value)}
+                        className="rounded-xl"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`assignment-${index}`}>Trabalho/Prova</Label>
-                    <Input
-                      id={`assignment-${index}`}
-                      placeholder="Ex: Prova 1, Trabalho Final..."
-                      value={gradeEntry.assignmentName}
-                      onChange={(e) => updateGradeEntry(index, 'assignmentName', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`grade-${index}`}>Nota</Label>
-                    <Input
-                      id={`grade-${index}`}
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      placeholder="0.0"
-                      value={gradeEntry.grade}
-                      onChange={(e) => updateGradeEntry(index, 'grade', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`maxGrade-${index}`}>Nota Máxima</Label>
-                    <Input
-                      id={`maxGrade-${index}`}
-                      type="number"
-                      min="1"
-                      value={gradeEntry.maxGrade}
-                      onChange={(e) => updateGradeEntry(index, 'maxGrade', e.target.value)}
-                    />
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeGradeEntry(index)}
+                    className="text-destructive hover:bg-destructive/10 rounded-full"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeGradeEntry(index)}
-                  className="ml-2 shrink-0"
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                <div className="space-y-2">
+                  <Label>Feedback (opcional)</Label>
+                  <Textarea
+                    placeholder="Comentários para o aluno..."
+                    value={gradeEntry.comments}
+                    onChange={(e) => updateGradeEntry(index, 'comments', e.target.value)}
+                    rows={2}
+                    className="rounded-xl"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor={`comments-${index}`}>Comentários (opcional)</Label>
-                <Textarea
-                  id={`comments-${index}`}
-                  placeholder="Feedback para o aluno..."
-                  value={gradeEntry.comments}
-                  onChange={(e) => updateGradeEntry(index, 'comments', e.target.value)}
-                  rows={2}
-                />
-              </div>
-            </div>
-          ))
-        )}
-
-        {grades.length > 0 && (
-          <Button onClick={saveGrades} disabled={saving} className="w-full gap-2">
-            <Save className="h-4 w-4" />
-            {saving ? 'Salvando...' : 'Salvar Todas as Notas'}
-          </Button>
+            ))}
+            
+            <Button 
+              onClick={saveGrades} 
+              disabled={saving} 
+              className="w-full rounded-xl h-12 font-bold shadow-lg"
+            >
+              {saving ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...</>
+              ) : (
+                <><Save className="h-4 w-4 mr-2" /> Salvar Todas as Notas</>
+              )}
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>

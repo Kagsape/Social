@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Plus, ExternalLink, Github, Heart, MessageSquare, Loader2 } from 'lucide-react';
+import { Plus, ExternalLink, Github, Heart, MessageSquare, Loader2, Image as ImageIcon, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +29,10 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchProjects = async () => {
     try {
@@ -53,6 +57,18 @@ const Projects = () => {
     fetchProjects();
   }, []);
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAddProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user) return;
@@ -61,22 +77,52 @@ const Projects = () => {
     const formData = new FormData(e.currentTarget);
     
     try {
+      let imageUrl = null;
+
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `projects/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('uploads')
+          .upload(filePath, imageFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('uploads')
+          .getPublicUrl(filePath);
+        
+        imageUrl = publicUrl;
+      }
+
       const { error } = await supabase
         .from('projects')
         .insert({
           title: formData.get('title'),
           description: formData.get('description'),
           link: formData.get('link'),
+          image_url: imageUrl,
           user_id: user.id,
-          tags: ['Projeto'] // Tags padrão
+          tags: ['Projeto']
         });
 
       if (error) throw error;
 
-      showSuccess('Projeto compartilhado com sucesso!');
+      // Incrementar pontos por projeto (50 pontos)
+      await supabase.rpc('increment_user_points', { 
+        user_id: user.id, 
+        points_to_add: 50 
+      });
+
+      showSuccess('Projeto compartilhado! Você ganhou 50 pontos.');
       setIsDialogOpen(false);
+      setImageFile(null);
+      setImagePreview(null);
       fetchProjects();
     } catch (error) {
+      console.error('Erro ao publicar projeto:', error);
       showError('Erro ao publicar projeto.');
     } finally {
       setSubmitting(false);
@@ -119,9 +165,45 @@ const Projects = () => {
                     <Label htmlFor="link">Link (GitHub ou Site)</Label>
                     <Input id="link" name="link" placeholder="https://..." />
                   </div>
+                  
+                  <div className="grid gap-2">
+                    <Label>Capa do Projeto</Label>
+                    <div 
+                      className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {imagePreview ? (
+                        <div className="relative">
+                          <img src={imagePreview} alt="Preview" className="max-h-40 mx-auto rounded-lg" />
+                          <Button 
+                            type="button"
+                            variant="destructive" 
+                            size="icon" 
+                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                            onClick={(e) => { e.stopPropagation(); setImagePreview(null); setImageFile(null); }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                          <ImageIcon className="h-8 w-8 opacity-50" />
+                          <span className="text-xs">Clique para selecionar uma imagem</span>
+                        </div>
+                      )}
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      ref={fileInputRef} 
+                      onChange={handleImageSelect}
+                    />
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button type="submit" className="w-full" disabled={submitting}>
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                     {submitting ? 'Publicando...' : 'Publicar Projeto'}
                   </Button>
                 </DialogFooter>

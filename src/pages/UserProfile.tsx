@@ -110,7 +110,6 @@ const UserProfile = () => {
 
     fetchProfileData();
 
-    // Realtime para status online no perfil
     const channel = supabase
       .channel(`profile-${id}`)
       .on('postgres_changes', {
@@ -281,6 +280,9 @@ const UserProfile = () => {
                 </div>
                 <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1"><Mail className="h-4 w-4" /> {profile.email}</span>
+                  {profile.location && (
+                    <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {profile.location}</span>
+                  )}
                   {profile.is_online ? (
                     <span className="flex items-center gap-1 text-green-600 font-bold"><span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" /> Online agora</span>
                   ) : (

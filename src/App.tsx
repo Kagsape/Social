@@ -22,6 +22,7 @@ import AdminCoursesPage from "./pages/AdminCoursesPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import AdminRolesPage from "./pages/AdminRolesPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
+import AdminLogsPage from "./pages/AdminLogsPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import Messages from "./pages/Messages";
 import AuthCallback from "./pages/AuthCallback";
@@ -31,6 +32,7 @@ import Leaderboard from "./pages/Leaderboard";
 import Projects from "./pages/Projects";
 import Events from "./pages/Events";
 import Help from "./pages/Help";
+import Search from "./pages/Search";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +48,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/search" element={<Search />} />
             
             {/* Public/Common Routes */}
             <Route path="/resources" element={<Resources />} />
@@ -122,10 +125,15 @@ const App = () => (
                 <AdminSettingsPage />
               </ProtectedRoute>
             } />
+            <Route path="/admin/logs" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminLogsPage />
+              </ProtectedRoute>
+            } />
 
             {/* Role Specific Dashboards */}
             <Route path="/dashboard" element={
-              <ProtectedRoute allowedRoles={['student']}>
+              <ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}>
                 <StudentDashboard />
               </ProtectedRoute>
             } />

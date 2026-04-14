@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -19,7 +19,8 @@ import {
   FolderKanban,
   Calendar,
   HelpCircle,
-  FileText
+  FileText,
+  GraduationCap
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,9 +37,11 @@ import {
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { userProfile } = useAuth();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [globalSearch, setGlobalSearch] = useState('');
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
@@ -52,6 +55,15 @@ const Navbar = () => {
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
     document.documentElement.classList.toggle('dark', newTheme === 'dark');
+  };
+
+  const handleGlobalSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (globalSearch.trim()) {
+      navigate(`/search?q=${encodeURIComponent(globalSearch.trim())}`);
+      setIsSearchOpen(false);
+      setGlobalSearch('');
+    }
   };
   
   const getNavItems = () => {
@@ -67,26 +79,19 @@ const Navbar = () => {
       return commonItems;
     }
 
-    const roleBasedItems = [];
+    const roleBasedItems = [
+      { name: 'Feed', path: '/feed', icon: Users },
+      { name: 'Mensagens', path: '/messages', icon: MessageSquare },
+      { name: 'Cursos', path: '/courses', icon: BookOpen },
+      { name: 'Meu Aprendizado', path: '/dashboard', icon: GraduationCap }
+    ];
 
-    if (userProfile.role === 'student') {
+    if (userProfile.role === 'teacher') {
       roleBasedItems.push(
-        { name: 'Feed', path: '/feed', icon: Users },
-        { name: 'Mensagens', path: '/messages', icon: MessageSquare },
-        { name: 'Cursos', path: '/courses', icon: BookOpen },
-        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }
-      );
-    } else if (userProfile.role === 'teacher') {
-      roleBasedItems.push(
-        { name: 'Feed', path: '/feed', icon: Users },
-        { name: 'Mensagens', path: '/messages', icon: MessageSquare },
-        { name: 'Cursos', path: '/courses', icon: BookOpen },
-        { name: 'Painel', path: '/teacher', icon: LayoutDashboard }
+        { name: 'Painel Professor', path: '/teacher', icon: LayoutDashboard }
       );
     } else if (userProfile.role === 'admin') {
       roleBasedItems.push(
-        { name: 'Feed', path: '/feed', icon: Users },
-        { name: 'Mensagens', path: '/messages', icon: MessageSquare },
         { name: 'Admin', path: '/admin', icon: ShieldCheck },
         { name: 'Cursos', path: '/admin/courses', icon: BookOpen },
         { name: 'Laboratório', path: '/admin/lab', icon: Monitor }
@@ -161,15 +166,17 @@ const Navbar = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-1 justify-end">
-          <div className="relative w-full max-w-[200px] hidden md:block">
+        <div className="flex items-center gap-2 flex-1 justify-end">
+          <form onSubmit={handleGlobalSearch} className="relative w-full max-w-[150px] lg:max-w-[200px] hidden md:block">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar..."
+              placeholder="Buscar na comunidade..."
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
               className="pl-9 rounded-full bg-muted/50 border-none focus-visible:ring-1 h-9 text-sm"
             />
-          </div>
+          </form>
           
           <div className="flex items-center gap-2">
             <Button 
@@ -201,6 +208,21 @@ const Navbar = () => {
           </div>
         </div>
       </div>
+      {isSearchOpen && (
+        <div className="md:hidden p-4 border-t bg-background animate-in slide-in-from-top duration-200">
+          <form onSubmit={handleGlobalSearch} className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Buscar na comunidade..."
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
+              className="pl-10 rounded-xl bg-muted/50 border-none"
+              autoFocus
+            />
+          </form>
+        </div>
+      )}
     </nav>
   );
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,25 +17,75 @@ import {
   Lock, 
   Globe, 
   Palette, 
-  Mail,
   Save,
   ShieldAlert,
-  Database
+  Loader2
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const AdminSettingsPage = () => {
   const { userProfile } = useAuth();
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [allowEnrollment, setAllowEnrollment] = useState(true);
+  const [schoolName, setSchoolName] = useState('CIEP 165 Brigadeiro Sérgio Carvalho');
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('*');
+      
+      if (error) throw error;
+      
+      if (data) {
+        const enrollment = data.find(s => s.key === 'allow_online_enrollment');
+        const name = data.find(s => s.key === 'school_name');
+        
+        if (enrollment) setAllowEnrollment(enrollment.value === true);
+        if (name) setSchoolName(name.value as string);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const updates = [
+        { key: 'allow_online_enrollment', value: allowEnrollment, updated_at: new Date().toISOString() },
+        { key: 'school_name', value: schoolName, updated_at: new Date().toISOString() }
+      ];
+
+      const { error } = await supabase
+        .from('settings')
+        .upsert(updates);
+
+      if (error) throw error;
       showSuccess('Configurações salvas com sucesso!');
+    } catch (error) {
+      showError('Erro ao salvar configurações.');
+    } finally {
       setSaving(false);
-    }, 1000);
+    }
   };
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center min-h-[40vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -73,19 +123,15 @@ const AdminSettingsPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="school-name">Nome da Instituição</Label>
-                    <Input id="school-name" defaultValue="CIEP 165 Brigadeiro Sérgio Carvalho" />
+                    <Input 
+                      id="school-name" 
+                      value={schoolName} 
+                      onChange={(e) => setSchoolName(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="school-email">E-mail de Contato</Label>
                     <Input id="school-email" defaultValue="contato@ciep165.edu.br" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="school-phone">Telefone</Label>
-                    <Input id="school-phone" defaultValue="(21) 0000-0000" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="school-address">Endereço</Label>
-                    <Input id="school-address" defaultValue="Rua Exemplo, 123 - Rio de Janeiro" />
                   </div>
                 </div>
                 
@@ -97,9 +143,12 @@ const AdminSettingsPage = () => {
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <Label>Matrículas Online</Label>
-                        <p className="text-sm text-muted-foreground">Permitir que novos alunos se cadastrem sozinhos.</p>
+                        <p className="text-sm text-muted-foreground">Permitir que novos alunos se cadastrem sozinhos nos cursos.</p>
                       </div>
-                      <Switch defaultChecked />
+                      <Switch 
+                        checked={allowEnrollment} 
+                        onCheckedChange={setAllowEnrollment} 
+                      />
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
@@ -129,20 +178,6 @@ const AdminSettingsPage = () => {
                     </div>
                     <Switch defaultChecked />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Alertas de Reserva</Label>
-                      <p className="text-sm text-muted-foreground">Notificar professores sobre reservas confirmadas.</p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Lembretes de Aula</Label>
-                      <p className="text-sm text-muted-foreground">Enviar lembretes 15 minutos antes do início da aula.</p>
-                    </div>
-                    <Switch />
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -156,13 +191,6 @@ const AdminSettingsPage = () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Autenticação de Dois Fatores (2FA)</Label>
-                      <p className="text-sm text-muted-foreground">Exigir 2FA para administradores e professores.</p>
-                    </div>
-                    <Switch />
-                  </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Logs de Atividade</Label>

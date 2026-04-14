@@ -5,7 +5,7 @@ import Layout from '@/components/Layout';
 import CourseCard from '@/components/CourseCard';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop, BookOpen, Monitor, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop, BookOpen, Monitor } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -17,15 +17,22 @@ const Index = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch featured courses
+        // Fetch featured courses with enrollment count
         const { data: courses } = await supabase
           .from('courses')
           .select(`
             *,
-            users!courses_teacher_id_fkey (name)
+            users!courses_teacher_id_fkey (name),
+            enrollments (count)
           `)
           .limit(3);
-        setFeaturedCourses(courses || []);
+        
+        const processed = (courses || []).map(c => ({
+          ...c,
+          student_count: c.enrollments?.[0]?.count || 0
+        }));
+        
+        setFeaturedCourses(processed);
 
         // Fetch lab status
         const { data: computers } = await supabase
@@ -138,14 +145,14 @@ const Index = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {featuredCourses.map((course) => (
               <CourseCard 
-                key={course.id} 
+                key={course.id}
+                id={course.id}
                 title={course.name}
                 instructor={course.users?.name || 'A definir'}
-                thumbnail="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=60"
-                rating={4.9}
-                students={60}
-                duration="20h"
-                category={course.category || 'Tecnologia'}
+                thumbnail={course.image_url}
+                students={course.student_count}
+                duration={course.duration}
+                category={course.category}
               />
             ))}
           </div>
