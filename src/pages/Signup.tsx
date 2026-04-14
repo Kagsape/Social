@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { User, Mail, Lock, UserCheck, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { User, Mail, Lock, UserCheck, ShieldAlert, ArrowLeft, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Select,
@@ -27,10 +27,7 @@ const Signup = () => {
   const handleRegister = async (data: any) => {
     setLoading(true);
     try {
-      console.log('[Signup] Iniciando processo de cadastro para:', data.email);
-      
-      // 1. Tentar validar contra a Lista Branca (opcional se a tabela não existir)
-      let isWhitelisted = true;
+      // 1. Verificar Whitelist (Opcional - não bloqueia se a tabela não existir)
       try {
         const { data: whitelistEntry, error: whitelistError } = await supabase
           .from('registration_whitelist')
@@ -39,47 +36,42 @@ const Signup = () => {
           .eq('role', role)
           .maybeSingle();
 
-        if (whitelistError && whitelistError.code !== 'PGRST204' && whitelistError.code !== '42P01') {
-          console.warn('[Signup] Erro ao consultar whitelist:', whitelistError);
-        } else if (!whitelistEntry && !whitelistError) {
-          // Se a tabela existe e o ID não está lá, barramos (segurança)
-          throw new Error(`O ID de ${role === 'student' ? 'matrícula' : 'registro'} informado não foi autorizado. Procure a secretaria.`);
+        // Se a tabela existe e o ID NÃO está lá, barramos
+        if (!whitelistError && !whitelistEntry) {
+          throw new Error(`O ID de ${role === 'student' ? 'matrícula' : 'registro'} informado não foi pré-autorizado.`);
         }
       } catch (err: any) {
-        // Se a tabela não existir (42P01), ignoramos a trava para não bloquear o site
-        if (err.message?.includes('não foi autorizado')) throw err;
-        console.log('[Signup] Whitelist não configurada ou inacessível, prosseguindo com cadastro padrão.');
+        // Se o erro for "tabela não existe" ou algo similar, ignoramos para não travar o site
+        if (err.message?.includes('não foi pré-autorizado')) throw err;
+        console.log('[Signup] Whitelist ignorada ou inacessível.');
       }
 
-      // 2. Preparar Metadados
-      const metadata: any = {
-        name: data.name,
-        role: role,
-        [role === 'student' ? 'student_id' : 'teacher_id']: data.registration_id
-      };
-
-      // 3. Realizar o cadastro no Supabase Auth
+      // 2. Cadastro no Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/login`,
-          data: metadata
+          data: {
+            name: data.name,
+            role: role,
+            [role === 'student' ? 'student_id' : 'teacher_id']: data.registration_id
+          }
         },
       });
 
       if (authError) throw authError;
 
+      showSuccess('Cadastro realizado com sucesso!');
+      
+      // Se o login for automático após o cadastro
       if (authData.session) {
-        showSuccess('Cadastro realizado e login efetuado!');
         navigate('/feed');
       } else {
-        showSuccess('Cadastro realizado! Verifique seu e-mail para confirmar a conta.');
         navigate('/login');
       }
     } catch (error: any) {
-      console.error('[Signup] Erro crítico:', error);
-      showError(error.message || 'Erro ao cadastrar. Verifique os dados e tente novamente.');
+      console.error('[Signup] Erro:', error);
+      showError(error.message || 'Erro ao realizar cadastro.');
     } finally {
       setLoading(false);
     }
@@ -183,7 +175,7 @@ const Signup = () => {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg shadow-lg transition-all active:scale-[0.98]" disabled={loading}>
+              <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg shadow-lg" disabled={loading}>
                 {loading ? (
                   <><Loader2 className="h-5 w-5 animate-spin mr-2" /> Criando conta...</>
                 ) : 'Finalizar Cadastro'}
