@@ -14,10 +14,12 @@ import {
   Loader2, 
   GraduationCap, 
   User,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -31,6 +33,7 @@ const AdminWhitelistPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [tableExists, setTableExists] = useState(true);
 
   // Form state
   const [newId, setNewId] = useState('');
@@ -45,8 +48,15 @@ const AdminWhitelistPage = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST204' || error.code === '42P01') {
+          setTableExists(false);
+        }
+        throw error;
+      }
+      
       setWhitelist(data || []);
+      setTableExists(true);
     } catch (error) {
       console.error('Erro ao buscar whitelist:', error);
     } finally {
@@ -74,7 +84,7 @@ const AdminWhitelistPage = () => {
 
       if (error) throw error;
 
-      showSuccess(`${newName} adicionado à lista de autorizados.`);
+      showSuccess(`${newName} autorizado com sucesso.`);
       setNewId('');
       setNewName('');
       fetchWhitelist();
@@ -95,7 +105,7 @@ const AdminWhitelistPage = () => {
         .eq('id', id);
 
       if (error) throw error;
-      showSuccess('ID removido da lista.');
+      showSuccess('ID removido.');
       fetchWhitelist();
     } catch (error) {
       showError('Erro ao remover ID.');
@@ -107,6 +117,23 @@ const AdminWhitelistPage = () => {
     item.registration_id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  if (!tableExists) {
+    return (
+      <AdminLayout>
+        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4 p-8 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-3xl">
+          <AlertTriangle className="h-12 w-12 text-amber-500" />
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold">Tabela não encontrada</h2>
+            <p className="text-muted-foreground max-w-md">
+              A tabela <code className="bg-amber-100 dark:bg-amber-900/30 px-1 rounded">registration_whitelist</code> ainda não foi criada no seu banco de dados Supabase.
+            </p>
+          </div>
+          <Button onClick={fetchWhitelist} variant="outline">Tentar Novamente</Button>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -116,7 +143,6 @@ const AdminWhitelistPage = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Form Section */}
           <Card className="border-none shadow-sm h-fit">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -166,7 +192,6 @@ const AdminWhitelistPage = () => {
             </CardContent>
           </Card>
 
-          {/* List Section */}
           <div className="lg:col-span-2 space-y-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
