@@ -70,18 +70,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       let finalProfile = profile;
 
-      // Se o perfil existe mas falta a matrícula (contas antigas), vamos sincronizar
+      // Sincronização de contas antigas (Matrícula e Cargo)
       if (profile) {
         const metaStudentId = currentUser.user_metadata?.student_id;
         const metaTeacherId = currentUser.user_metadata?.teacher_id;
+        const metaRole = currentUser.user_metadata?.role;
         
-        if ((!profile.student_id && metaStudentId) || (!profile.teacher_id && metaTeacherId)) {
-          console.log('[Auth] Sincronizando matrícula de conta antiga...');
+        // Verifica se precisa atualizar matrícula ou se o cargo está como 'student' mas no meta está 'teacher'
+        const needsUpdate = 
+          (!profile.student_id && metaStudentId) || 
+          (!profile.teacher_id && metaTeacherId) ||
+          (metaRole && profile.role !== metaRole && profile.role === 'student');
+        
+        if (needsUpdate) {
+          console.log('[Auth] Sincronizando dados e cargo de conta antiga...');
           const { data: updatedProfile } = await supabase
             .from('users')
             .update({
               student_id: profile.student_id || metaStudentId || null,
-              teacher_id: profile.teacher_id || metaTeacherId || null
+              teacher_id: profile.teacher_id || metaTeacherId || null,
+              role: (metaRole && profile.role === 'student') ? metaRole : profile.role
             })
             .eq('id', userId)
             .select('*')
@@ -111,11 +119,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           throw createError;
         }
         finalProfile = newProfile;
-        console.log('[Auth] Perfil inicial criado com sucesso.');
       }
 
       if (finalProfile) {
-        console.log('[Auth] Carregando permissões para o cargo:', finalProfile.role);
         const { data: roleData } = await supabase
           .from('roles')
           .select('permissions')
@@ -130,8 +136,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         profileLoadedRef.current = userId;
         setUserProfile(finalProfile);
-        console.log('[Auth] Perfil carregado completamente.');
-        
         updateOnlineStatus(userId, true);
       }
     } catch (err) {
@@ -145,17 +149,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    console.log('[Auth] Inicializando AuthProvider...');
-
     const initialize = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (initialSession) {
-          console.log('[Auth] Sessão inicial encontrada para:', initialSession.user.email);
           setSession(initialSession);
           setUser(initialSession.user);
-        } else {
-          console.log('[Auth] Nenhuma sessão inicial encontrada.');
         }
       } catch (error) {
         console.error('[Auth] Erro ao obter sessão inicial:', error);
@@ -168,7 +167,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
-        console.log('[Auth] Evento de autenticação:', event);
         const currentUser = currentSession?.user ?? null;
         
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
@@ -180,7 +178,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           setLoading(false);
         } else if (event === 'SIGNED_OUT') {
-          console.log('[Auth] Usuário deslogado.');
           if (user) updateOnlineStatus(user.id, false);
           setSession(null);
           setUser(null);
@@ -207,7 +204,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchUserProfile, updateOnlineStatus, user]);
 
   const signOut = async () => {
-    console.log('[Auth] Iniciando logout...');
     if (user) await updateOnlineStatus(user.id, false);
     setLoading(true);
     await supabase.auth.signOut();
@@ -215,7 +211,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshProfile = async () => {
     if (user) {
-      console.log('[Auth] Atualizando perfil manualmente...');
       profileLoadedRef.current = null;
       fetchUserProfile(user.id, user);
     }
