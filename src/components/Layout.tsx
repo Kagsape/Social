@@ -10,9 +10,9 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50/50 dark:bg-slate-950 w-full overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 w-full overflow-x-hidden">
       <Navbar />
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 md:py-8 animate-in fade-in duration-500">
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 animate-in fade-in duration-500">
         {children}
       </main>
       <footer className="border-t py-8 mt-auto bg-white dark:bg-slate-900 w-full">
