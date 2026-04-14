@@ -78,18 +78,18 @@ const Index = () => {
       </div>
 
       {/* Hero Section */}
-      <section className="relative py-12 md:py-24 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 text-white mb-16">
+      <section className="relative py-12 md:py-20 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 text-white mb-16">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
         </div>
-        <div className="relative z-10 px-6 md:px-16 max-w-3xl">
+        <div className="relative z-10 px-6 md:px-12 max-w-3xl">
           <Badge className="mb-4 bg-blue-500/20 text-blue-300 border-blue-500/30 backdrop-blur-md">
             CIEP 165 Brigadeiro Sérgio Carvalho
           </Badge>
-          <h1 className="text-3xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
+          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-6 leading-tight">
             Sala de Informática: <span className="text-blue-400">Inovação e Futuro</span>
           </h1>
-          <p className="text-base md:text-xl text-slate-300 mb-8 max-w-xl">
+          <p className="text-base md:text-lg text-slate-300 mb-8 max-w-xl">
             Bem-vindo ao portal de tecnologia do CIEP 165. Aqui você aprende programação, robótica e domina o mundo digital.
           </p>
           <div className="flex flex-wrap gap-4">
@@ -106,12 +106,12 @@ const Index = () => {
           </div>
         </div>
         
-        <div className="absolute right-10 top-1/2 -translate-y-1/2 hidden lg:block opacity-20">
+        <div className="absolute right-10 top-1/2 -translate-y-1/2 hidden lg:block opacity-10">
           <div className="grid grid-cols-2 gap-8 animate-pulse">
-            <Laptop size={80} />
-            <Terminal size={80} className="mt-12" />
-            <Cpu size={80} />
-            <Code2 size={80} className="mt-12" />
+            <Laptop size={60} />
+            <Terminal size={60} className="mt-12" />
+            <Cpu size={60} />
+            <Code2 size={60} className="mt-12" />
           </div>
         </div>
       </section>
