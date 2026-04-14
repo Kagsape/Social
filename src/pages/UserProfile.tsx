@@ -22,7 +22,8 @@ import {
   MapPin,
   UserPlus,
   UserMinus,
-  Clock
+  Clock,
+  Hash
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -244,6 +245,7 @@ const UserProfile = () => {
   }
 
   const isOwnProfile = currentUser?.id === id;
+  const canSeeRegistrationId = isOwnProfile || currentUserProfile?.role === 'admin' || currentUserProfile?.role === 'teacher';
 
   return (
     <Layout>
@@ -280,6 +282,13 @@ const UserProfile = () => {
                 </div>
                 <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1"><Mail className="h-4 w-4" /> {profile.email}</span>
+                  
+                  {canSeeRegistrationId && (profile.student_id || profile.teacher_id) && (
+                    <span className="flex items-center gap-1 font-mono font-bold text-primary">
+                      <Hash className="h-4 w-4" /> ID: {profile.student_id || profile.teacher_id}
+                    </span>
+                  )}
+
                   {profile.location && (
                     <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {profile.location}</span>
                   )}

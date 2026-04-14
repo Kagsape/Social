@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
-import { User, Camera, Save, LogOut, Loader2, MapPin, FileText, Hash } from 'lucide-react';
+import { User, Camera, Save, LogOut, Loader2, MapPin, FileText, Hash, Lock } from 'lucide-react';
 
 const Profile = () => {
   const { user, userProfile, refreshProfile, signOut } = useAuth();
@@ -46,7 +46,7 @@ const Profile = () => {
           avatar_url: avatarUrl.trim(),
           bio: bio.trim(),
           location: location.trim(),
-          student_id: studentId.trim(),
+          // Removido student_id do update para garantir que não seja alterado via formulário
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);
@@ -101,11 +101,6 @@ const Profile = () => {
                     <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase">
                       {userProfile?.role === 'student' ? 'Aluno' : userProfile?.role === 'teacher' ? 'Professor' : 'Admin'}
                     </span>
-                    {registrationId && (
-                      <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-mono font-bold">
-                        ID: {registrationId}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
@@ -143,21 +138,21 @@ const Profile = () => {
                   </div>
                 </div>
 
-                {userProfile?.role === 'student' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="student_id">Número de Matrícula</Label>
-                    <div className="relative">
-                      <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input 
-                        id="student_id" 
-                        value={studentId} 
-                        onChange={(e) => setStudentId(e.target.value)} 
-                        placeholder="Seu número de matrícula" 
-                        className="pl-10 font-mono"
-                      />
-                    </div>
+                <div className="space-y-2">
+                  <Label htmlFor="student_id" className="flex items-center gap-2">
+                    Número de Matrícula <Lock className="h-3 w-3 text-muted-foreground" />
+                  </Label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      id="student_id" 
+                      value={studentId} 
+                      disabled
+                      className="pl-10 font-mono bg-slate-50 cursor-not-allowed opacity-70"
+                    />
                   </div>
-                )}
+                  <p className="text-[10px] text-muted-foreground italic">A matrícula é vinculada à sua conta e não pode ser alterada.</p>
+                </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="avatar">URL da Foto de Perfil</Label>
