@@ -29,7 +29,6 @@ const Profile = () => {
       setAvatarUrl(userProfile.avatar_url || '');
       setBio(userProfile.bio || '');
       setLocation(userProfile.location || '');
-      // Pega o ID de estudante ou de professor, o que estiver preenchido
       setDisplayId(userProfile.student_id || userProfile.teacher_id || '');
     }
   }, [userProfile]);
@@ -137,19 +136,19 @@ const Profile = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="display_id" className="flex items-center gap-2">
-                    Número de Matrícula / ID <Lock className="h-3 w-3 text-muted-foreground" />
+                  <Label htmlFor="display_id" className="flex items-center gap-2 font-bold text-foreground">
+                    Número de Matrícula / ID <Lock className="h-3 w-3 text-primary" />
                   </Label>
                   <div className="relative">
-                    <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Hash className="absolute left-3 top-3 h-4 w-4 text-primary" />
                     <Input 
                       id="display_id" 
                       value={displayId} 
                       disabled
-                      className="pl-10 font-mono bg-slate-50 cursor-not-allowed opacity-70"
+                      className="pl-10 font-mono font-black text-lg bg-slate-100 dark:bg-slate-800 border-primary/20 text-primary cursor-not-allowed opacity-100"
                     />
                   </div>
-                  <p className="text-[10px] text-muted-foreground italic">A matrícula é vinculada à sua conta e não pode ser alterada.</p>
+                  <p className="text-[10px] text-primary font-medium italic">Este número é único e não pode ser alterado.</p>
                 </div>
 
                 <div className="space-y-2">
