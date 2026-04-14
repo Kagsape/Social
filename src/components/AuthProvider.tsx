@@ -70,6 +70,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       let finalProfile = profile;
 
+      // Se o perfil existe mas falta a matrícula (contas antigas), vamos sincronizar
+      if (profile) {
+        const metaStudentId = currentUser.user_metadata?.student_id;
+        const metaTeacherId = currentUser.user_metadata?.teacher_id;
+        
+        if ((!profile.student_id && metaStudentId) || (!profile.teacher_id && metaTeacherId)) {
+          console.log('[Auth] Sincronizando matrícula de conta antiga...');
+          const { data: updatedProfile } = await supabase
+            .from('users')
+            .update({
+              student_id: profile.student_id || metaStudentId || null,
+              teacher_id: profile.teacher_id || metaTeacherId || null
+            })
+            .eq('id', userId)
+            .select('*')
+            .single();
+          
+          if (updatedProfile) finalProfile = updatedProfile;
+        }
+      }
+
       if (!profile) {
         console.log('[Auth] Perfil não encontrado, tentando criar perfil inicial...');
         const { data: newProfile, error: createError } = await supabase
@@ -79,7 +100,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             name: currentUser.user_metadata?.name || currentUser.email?.split('@')[0] || 'Usuário',
             email: currentUser.email,
             role: currentUser.user_metadata?.role || (currentUser.email === CHIEF_ADMIN_EMAIL ? 'admin' : 'student'),
-            student_id: currentUser.user_metadata?.student_id || null
+            student_id: currentUser.user_metadata?.student_id || null,
+            teacher_id: currentUser.user_metadata?.teacher_id || null
           })
           .select('*')
           .single();
