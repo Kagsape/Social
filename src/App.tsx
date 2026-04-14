@@ -34,6 +34,7 @@ import Projects from "./pages/Projects";
 import Events from "./pages/Events";
 import Help from "./pages/Help";
 import Search from "./pages/Search";
+import CompleteProfile from "./pages/CompleteProfile";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/signup" element={<Signup />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/search" element={<Search />} />
+            <Route path="/complete-profile" element={<CompleteProfile />} />
             
             {/* Public/Common Routes */}
             <Route path="/resources" element={<Resources />} />

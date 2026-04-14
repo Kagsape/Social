@@ -32,6 +32,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return <>{children}</>;
   }
 
+  // Se o usuário está logado mas NÃO tem matrícula, e NÃO está na página de completar perfil, redireciona
+  const hasNoId = userProfile && !userProfile.student_id && !userProfile.teacher_id;
+  if (hasNoId && location.pathname !== '/complete-profile') {
+    return <Navigate to="/complete-profile" replace />;
+  }
+
   if (allowedRoles.length > 0 && userProfile && !allowedRoles.includes(userProfile.role)) {
     return <Navigate to="/" replace />;
   }
