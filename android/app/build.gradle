@@ -1,19 +1,20 @@
-plugins {
-    id 'com.android.application'
-}
+apply plugin: 'com.android.application'
 
 android {
-    namespace 'com.ciep165.app'
-    compileSdk 33
-
+    namespace "com.ciep165.app"
+    compileSdk project.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.ciep165.app"
-        minSdk 24
-        targetSdk 33
+        minSdk project.ext.minSdkVersion
+        targetSdk project.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Allows to use '@' in XML attributes
+             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
     }
-
     buildTypes {
         release {
             minifyEnabled false
@@ -22,8 +23,31 @@ android {
     }
 }
 
+repositories {
+    flatDir{
+        dirs 'libs'
+    }
+}
+
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation "androidx.appcompat:appcompat:$project.ext.androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$project.ext.androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core:$project.ext.androidxCoreVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$project.ext.junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$project.ext.androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$project.ext.androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. This is normal if you are not using Firebase.")
 }
