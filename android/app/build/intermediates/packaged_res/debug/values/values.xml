@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CIEP 165</string>
+    <style name="Theme.CIEP165" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#2563eb</item>
+        <item name="android:statusBarColor">#2563eb</item>
+    </style>
+</resources>
