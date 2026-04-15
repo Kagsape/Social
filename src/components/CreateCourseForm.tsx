@@ -24,20 +24,21 @@ const CreateCourseForm: React.FC<CreateCourseFormProps> = ({ onSuccess }) => {
 
   const isTeacher = userProfile?.role === 'teacher' || userProfile?.role === 'admin';
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const createCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !isTeacher) return;
 
     setLoading(true);
     try {
-      // 1. Criar o curso usando as colunas que existem no schema
+      // 1. Inserir o curso definindo o criador
       const { data: course, error: courseError } = await supabase
         .from('courses')
         .insert({
           name: name.trim(),
           description: description.trim(),
           code: code.trim() || `TURMA-${Math.random().toString(36).substring(7).toUpperCase()}`,
-          teacher_id: user.id,
+          created_by: user.id,
+          teacher_id: user.id, // Mantido para compatibilidade com layouts antigos
           category: 'Tecnologia'
         })
         .select()
@@ -45,26 +46,24 @@ const CreateCourseForm: React.FC<CreateCourseFormProps> = ({ onSuccess }) => {
 
       if (courseError) throw courseError;
 
-      // 2. Tentamos vincular na tabela de junção se ela existir, mas não travamos o processo se falhar
-      try {
-        await supabase
-          .from('course_teachers')
-          .insert({
-            course_id: course.id,
-            teacher_id: user.id
-          });
-      } catch (e) {
-        console.log('Tabela course_teachers não encontrada ou erro ao vincular, ignorando...');
-      }
+      // 2. Vincular automaticamente o criador na tabela de professores do curso
+      const { error: linkError } = await supabase
+        .from('course_teachers')
+        .insert({
+          course_id: course.id,
+          teacher_id: user.id
+        });
 
-      showSuccess('Turma criada com sucesso!');
+      if (linkError) throw linkError;
+
+      showSuccess('Curso criado e você foi vinculado como professor!');
       setName('');
       setDescription('');
       setCode('');
       onSuccess?.();
     } catch (error: any) {
       console.error('[CreateCourse] Erro:', error);
-      showError(error.message || 'Erro ao criar turma.');
+      showError(error.message || 'Erro ao criar curso.');
     } finally {
       setLoading(false);
     }
@@ -77,42 +76,42 @@ const CreateCourseForm: React.FC<CreateCourseFormProps> = ({ onSuccess }) => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-primary" />
-          Criar Nova Turma
+          Criar Novo Curso
         </CardTitle>
-        <CardDescription>Preencha os dados para abrir uma nova turma de informática.</CardDescription>
+        <CardDescription>Como professor, você será o administrador deste curso.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={createCourse} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="course-name">Nome da Turma</Label>
+            <Label htmlFor="course-name">Nome do Curso</Label>
             <Input
               id="course-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Introdução ao Python"
+              placeholder="Ex: Desenvolvimento Web Fullstack"
               required
               className="rounded-xl"
             />
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="course-code">Código da Turma (Opcional)</Label>
+            <Label htmlFor="course-code">Código de Identificação</Label>
             <Input
               id="course-code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="Ex: PY-2024-01"
+              placeholder="Ex: WEB-101"
               className="rounded-xl font-mono"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="course-desc">Descrição</Label>
+            <Label htmlFor="course-desc">Descrição do Conteúdo</Label>
             <Textarea
               id="course-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="O que os alunos aprenderão nesta turma?"
+              placeholder="O que os alunos aprenderão?"
               rows={3}
               className="rounded-xl"
             />
@@ -120,7 +119,7 @@ const CreateCourseForm: React.FC<CreateCourseFormProps> = ({ onSuccess }) => {
 
           <Button type="submit" className="w-full rounded-xl h-12 font-bold" disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-            {loading ? 'Criando...' : 'Criar Turma'}
+            {loading ? 'Criando...' : 'Publicar Curso'}
           </Button>
         </form>
       </CardContent>

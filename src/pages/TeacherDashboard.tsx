@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Users, Monitor, GraduationCap, UserCheck, ChevronRight, Loader2, Plus, X } from 'lucide-react';
+import { BookOpen, Users, Monitor, GraduationCap, UserCheck, ChevronRight, Loader2, Plus, X, Edit3, Settings } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { Link, useNavigate } from 'react-router-dom';
@@ -13,6 +13,7 @@ import AttendanceForm from '@/components/AttendanceForm';
 import GradeForm from '@/components/GradeForm';
 import ComputerReservationForm from '@/components/ComputerReservationForm';
 import CreateCourseForm from '@/components/CreateCourseForm';
+import EditCourseForm from '@/components/EditCourseForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { showError } from '@/utils/toast';
@@ -30,6 +31,7 @@ const TeacherDashboard = () => {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -40,16 +42,25 @@ const TeacherDashboard = () => {
   useEffect(() => {
     if (selectedCourse && selectedCourse !== 'none') {
       fetchCourseStudents(selectedCourse);
+      setShowEditForm(false); // Resetar form de edição ao trocar curso
     }
   }, [selectedCourse]);
 
   const fetchTeacherData = async () => {
     setLoading(true);
     try {
+      // Buscar cursos onde o professor é criador OU está vinculado
+      const { data: linkedCourses } = await supabase
+        .from('course_teachers')
+        .select('course_id')
+        .eq('teacher_id', user?.id);
+      
+      const courseIds = (linkedCourses || []).map(lc => lc.course_id);
+
       const { data: teacherCourses } = await supabase
         .from('courses')
         .select('*')
-        .eq('teacher_id', user?.id);
+        .or(`created_by.eq.${user?.id},id.in.(${courseIds.length > 0 ? courseIds.join(',') : '00000000-0000-0000-0000-000000000000'})`);
 
       setCourses(teacherCourses || []);
       if (teacherCourses && teacherCourses.length > 0 && !selectedCourse) {
@@ -95,14 +106,6 @@ const TeacherDashboard = () => {
     }
   };
 
-  const handleGoToLessons = () => {
-    if (!selectedCourse || selectedCourse === 'none') {
-      showError('Selecione um curso primeiro.');
-      return;
-    }
-    navigate(`/courses/${selectedCourse}/lessons`);
-  };
-
   if (loading) return <Layout><div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10" /></div></Layout>;
 
   return (
@@ -113,17 +116,18 @@ const TeacherDashboard = () => {
             <h1 className="text-3xl font-bold">Painel do Professor</h1>
             <p className="text-muted-foreground">Gerencie suas turmas e acompanhamento pedagógico.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button 
               variant={showCreateForm ? "outline" : "default"} 
-              onClick={() => setShowCreateForm(!showCreateForm)}
+              onClick={() => { setShowCreateForm(!showCreateForm); setShowEditForm(false); }}
               className="gap-2 rounded-xl"
             >
               {showCreateForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {showCreateForm ? "Cancelar" : "Nova Turma"}
             </Button>
+            
             <select 
-              className="p-2 border rounded-xl bg-background w-full md:w-auto h-10 text-sm"
+              className="p-2 border rounded-xl bg-background w-full md:w-auto h-10 text-sm font-medium"
               value={selectedCourse}
               onChange={(e) => setSelectedCourse(e.target.value)}
             >
@@ -132,15 +136,30 @@ const TeacherDashboard = () => {
                 <option key={course.id} value={course.id}>{course.name}</option>
               ))}
             </select>
-            <Button onClick={handleGoToLessons} variant="secondary" className="gap-2 rounded-xl h-10" disabled={!selectedCourse || selectedCourse === 'none'}>
-              <BookOpen className="h-4 w-4" /> Aulas
-            </Button>
+
+            {selectedCourse && selectedCourse !== 'none' && (
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="rounded-xl h-10 w-10"
+                onClick={() => { setShowEditForm(!showEditForm); setShowCreateForm(false); }}
+                title="Configurações do Curso"
+              >
+                <Settings className={cn("h-4 w-4", showEditForm && "text-primary")} />
+              </Button>
+            )}
           </div>
         </div>
 
         {showCreateForm && (
           <div className="animate-in fade-in slide-in-from-top-4 duration-300">
             <CreateCourseForm onSuccess={() => { setShowCreateForm(false); fetchTeacherData(); }} />
+          </div>
+        )}
+
+        {showEditForm && selectedCourse && (
+          <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+            <EditCourseForm courseId={selectedCourse} onSuccess={() => { setShowEditForm(false); fetchTeacherData(); }} />
           </div>
         )}
 
