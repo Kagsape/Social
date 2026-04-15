@@ -55,7 +55,7 @@ const Login = () => {
           redirectTo,
           queryParams: {
             access_type: 'offline',
-            prompt: 'select_account', // FORÇA o Google a pedir para escolher a conta
+            prompt: 'select_account',
           },
         }
       });
