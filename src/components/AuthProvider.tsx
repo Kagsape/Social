@@ -28,6 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   const fetchUserProfile = useCallback(async (userId: string) => {
+    console.log(`[Auth:Profile] Iniciando busca de perfil para: ${userId}`);
     try {
       // 1. Buscar perfil básico do usuário
       const { data: profile, error: profileError } = await supabase
@@ -37,7 +38,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .maybeSingle();
 
       if (profileError) {
-        console.error('[Auth] Erro ao buscar perfil:', profileError.message);
+        console.error('[Auth:Profile] Erro na tabela users:', profileError.message);
+      } else {
+        console.log('[Auth:Profile] Dados básicos carregados:', profile ? 'Sim' : 'Não encontrado');
       }
 
       // 2. Buscar cargos vinculados ao usuário
@@ -47,29 +50,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('user_id', userId);
 
       if (rolesError) {
-        console.error('[Auth] Erro ao buscar roles:', rolesError.message);
+        console.error('[Auth:Profile] Erro na tabela user_roles:', rolesError.message);
       }
 
       const rolesList = userRoles?.map((ur: any) => ur.roles?.name).filter(Boolean) || [];
+      console.log('[Auth:Profile] Cargos identificados:', rolesList);
       setRoles(rolesList);
 
       if (profile) {
         // 3. Buscar permissões baseadas nos cargos
-        const { data: roleData } = await supabase
+        const { data: roleData, error: permError } = await supabase
           .from('roles')
           .select('permissions')
           .in('name', rolesList);
         
+        if (permError) {
+          console.error('[Auth:Profile] Erro ao buscar permissões:', permError.message);
+        }
+
         const mergedPermissions = roleData?.reduce((acc, curr) => ({
           ...acc,
           ...(curr.permissions || {})
         }), {}) || {};
 
+        console.log('[Auth:Profile] Permissões mescladas com sucesso');
         setUserProfile({ ...profile, permissions: mergedPermissions });
       }
     } catch (err) {
-      console.error('[Auth] Erro crítico em fetchUserProfile:', err);
-      // Falhas no perfil não devem resetar a sessão, apenas manter o perfil como null
+      console.error('[Auth:Profile] Erro crítico inesperado:', err);
+    } finally {
+      console.log('[Auth:Profile] Finalizado processo de segundo plano');
     }
   }, []);
 
@@ -77,22 +87,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initialize = async () => {
+      console.log('[Auth:Init] Iniciando verificação de sessão...');
       try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
         
+        if (sessionError) {
+          console.error('[Auth:Init] Erro ao recuperar sessão inicial:', sessionError.message);
+        }
+
         if (mounted) {
           if (initialSession) {
+            console.log('[Auth:Init] Sessão encontrada para:', initialSession.user.email);
             setSession(initialSession);
             setUser(initialSession.user);
-            // Chamada em segundo plano: NÃO usamos await aqui
             fetchUserProfile(initialSession.user.id);
+          } else {
+            console.log('[Auth:Init] Nenhuma sessão ativa encontrada');
           }
         }
       } catch (error) {
-        console.error('[Auth] Erro na inicialização da sessão:', error);
+        console.error('[Auth:Init] Erro fatal na inicialização:', error);
       } finally {
         if (mounted) {
-          // Libera a interface imediatamente
+          console.log('[Auth:Init] Liberando interface (setLoading: false)');
           setLoading(false);
         }
       }
@@ -102,25 +119,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log(`[Auth] Evento detectado: ${event}`);
+        console.log(`[Auth:Event] Evento detectado: ${event}`);
         
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          console.log('[Auth:Event] Usuário autenticado:', currentSession?.user?.email);
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
           
           if (currentSession?.user) {
-            // Chamada em segundo plano: NÃO usamos await aqui
             fetchUserProfile(currentSession.user.id);
           }
-          // Libera a interface imediatamente após definir o usuário
+          
+          console.log('[Auth:Event] Liberando interface após login/refresh');
           setLoading(false);
         } else if (event === 'SIGNED_OUT') {
+          console.log('[Auth:Event] Usuário deslogado');
           setSession(null);
           setUser(null);
           setUserProfile(null);
           setRoles([]);
           setLoading(false);
         } else if (event === 'INITIAL_SESSION') {
+          console.log('[Auth:Event] Sessão inicial processada');
           setLoading(false);
         }
       }
@@ -133,17 +153,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchUserProfile]);
 
   const signOut = async () => {
+    console.log('[Auth:Action] Iniciando logout...');
     try {
       setLoading(true);
       await supabase.auth.signOut();
     } catch (error) {
-      console.error('[Auth] Erro ao sair:', error);
+      console.error('[Auth:Action] Erro ao deslogar:', error);
       setLoading(false);
     }
   };
 
   const refreshProfile = async () => {
-    if (user) await fetchUserProfile(user.id);
+    if (user) {
+      console.log('[Auth:Action] Atualizando perfil manualmente...');
+      await fetchUserProfile(user.id);
+    }
   };
 
   const hasPermission = (permission: string) => {
