@@ -25,12 +25,14 @@ const CompleteProfile = () => {
   const [registrationId, setRegistrationId] = useState('');
   const [role, setRole] = useState<'student' | 'teacher'>('student');
 
-  // Se o usuário já tem matrícula, redireciona para o feed
   useEffect(() => {
-    if (userProfile && (userProfile.student_id || userProfile.teacher_id)) {
+    const isChiefAdmin = user?.email === 'xakatosh66@gmail.com';
+    
+    // Se for o admin mestre ou já tiver matrícula, vai direto para o feed
+    if (isChiefAdmin || (userProfile && (userProfile.student_id || userProfile.teacher_id))) {
       navigate('/feed');
     }
-  }, [userProfile, navigate]);
+  }, [user, userProfile, navigate]);
 
   const handleComplete = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +42,6 @@ const CompleteProfile = () => {
     const cleanId = registrationId.trim();
 
     try {
-      // 1. Validar na Whitelist
       const { data: whitelistEntry, error: whitelistError } = await supabase
         .from('registration_whitelist')
         .select('*')
@@ -53,13 +54,11 @@ const CompleteProfile = () => {
         throw new Error(`O ID "${cleanId}" não está na lista de autorizados.`);
       }
 
-      // 2. Validar se o cargo bate
       if (whitelistEntry.role !== role) {
         const cargoCorreto = whitelistEntry.role === 'student' ? 'ALUNO' : 'PROFESSOR';
         throw new Error(`Este ID está autorizado apenas para o cargo de ${cargoCorreto}.`);
       }
 
-      // 3. Verificar se já está em uso
       const idColumn = role === 'student' ? 'student_id' : 'teacher_id';
       const { data: existingUser } = await supabase
         .from('users')
@@ -71,7 +70,6 @@ const CompleteProfile = () => {
         throw new Error('Este número de matrícula já está sendo usado por outra conta.');
       }
 
-      // 4. Atualizar Perfil
       const { error: updateError } = await supabase
         .from('users')
         .update({
@@ -83,7 +81,6 @@ const CompleteProfile = () => {
 
       if (updateError) throw updateError;
 
-      // 5. Atualizar Metadados do Auth (opcional, mas bom para consistência)
       await supabase.auth.updateUser({
         data: { 
           role: role,
