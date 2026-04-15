@@ -38,6 +38,7 @@ import Search from "./pages/Search";
 import CompleteProfile from "./pages/CompleteProfile";
 import CourseLessonsPage from "./pages/CourseLessonsPage";
 import StudentFilePage from "./pages/StudentFilePage";
+import Inventory from "./pages/Inventory";
 
 const queryClient = new QueryClient();
 
@@ -71,6 +72,7 @@ const App = () => (
             <Route path="/courses/:id" element={<ProtectedRoute><CourseDetails /></ProtectedRoute>} />
             <Route path="/courses/:id/lessons" element={<ProtectedRoute><CourseLessonsPage /></ProtectedRoute>} />
             <Route path="/student-file/:studentId" element={<ProtectedRoute allowedRoles={['teacher', 'admin']}><StudentFilePage /></ProtectedRoute>} />
+            <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
 
             <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/courses" element={<ProtectedRoute allowedRoles={['admin']}><AdminCoursesPage /></ProtectedRoute>} />
