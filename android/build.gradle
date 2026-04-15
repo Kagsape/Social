@@ -19,6 +19,30 @@ allprojects {
     }
 }
 
+// Estratégia de resolução global para evitar erros de mutação após resolução
+subprojects {
+    configurations.configureEach {
+        resolutionStrategy {
+            force "androidx.core:core:1.12.0"
+            force "androidx.core:core-ktx:1.12.0"
+            force "androidx.activity:activity:1.7.2"
+
+            eachDependency { DependencyResolveDetails details ->
+                // Força a versão do Kotlin em todo o projeto
+                if (details.requested.group == 'org.jetbrains.kotlin') {
+                    details.useVersion rootProject.ext.kotlinVersion
+                }
+            }
+            
+            // Resolve conflitos de Duplicate Class substituindo jdk7/jdk8 pela stdlib unificada
+            dependencySubstitution {
+                substitute module("org.jetbrains.kotlin:kotlin-stdlib-jdk7") using module("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
+                substitute module("org.jetbrains.kotlin:kotlin-stdlib-jdk8") using module("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
+            }
+        }
+    }
+}
+
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
