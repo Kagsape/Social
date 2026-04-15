@@ -43,7 +43,7 @@ import {
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userProfile } = useAuth();
+  const { userProfile, isAdmin, isTeacher } = useAuth();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [globalSearch, setGlobalSearch] = useState('');
 
@@ -86,9 +86,10 @@ const Navbar = () => {
   ];
 
   const adminItems = [];
-  if (userProfile?.role === 'teacher') {
+  if (isTeacher) {
     adminItems.push({ name: 'Painel Professor', path: '/teacher', icon: LayoutDashboard });
-  } else if (userProfile?.role === 'admin') {
+  }
+  if (isAdmin) {
     adminItems.push({ name: 'Admin', path: '/admin', icon: ShieldCheck });
   }
 
