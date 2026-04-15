@@ -19,7 +19,7 @@ allprojects {
     }
 }
 
-// Estratégia de resolução global para evitar erros de mutação após resolução
+// Estratégia de resolução global aplicada antes da resolução das configurações
 subprojects {
     configurations.configureEach {
         resolutionStrategy {
@@ -28,13 +28,13 @@ subprojects {
             force "androidx.activity:activity:1.7.2"
 
             eachDependency { DependencyResolveDetails details ->
-                // Força a versão do Kotlin em todo o projeto
+                // Força a versão do Kotlin 1.8.22 em todo o ecossistema do projeto
                 if (details.requested.group == 'org.jetbrains.kotlin') {
                     details.useVersion rootProject.ext.kotlinVersion
                 }
             }
             
-            // Resolve conflitos de Duplicate Class substituindo jdk7/jdk8 pela stdlib unificada
+            // Resolve o erro de 'Duplicate class' substituindo jdk7/jdk8 pela stdlib principal
             dependencySubstitution {
                 substitute module("org.jetbrains.kotlin:kotlin-stdlib-jdk7") using module("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
                 substitute module("org.jetbrains.kotlin:kotlin-stdlib-jdk8") using module("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
