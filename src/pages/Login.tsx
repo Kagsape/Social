@@ -48,10 +48,11 @@ const Login = () => {
   };
 
   const handleGoogleSignIn = async () => {
+    // No Capacitor, o redirectTo deve ser o esquema configurado no AndroidManifest
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`
+        redirectTo: 'com.ciep165.app://auth'
       }
     });
 
