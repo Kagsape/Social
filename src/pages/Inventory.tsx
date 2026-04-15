@@ -68,6 +68,9 @@ const Inventory = () => {
     item.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Permissão para adicionar: Admin ou Professor
+  const canAdd = isAdmin || isTeacher;
+
   return (
     <Layout>
       <div className="space-y-8">
@@ -76,7 +79,7 @@ const Inventory = () => {
             <h1 className="text-3xl font-bold tracking-tight">Inventário do Laboratório</h1>
             <p className="text-muted-foreground">Controle de equipamentos e materiais da Sala de Informática.</p>
           </div>
-          {isAdmin && (
+          {canAdd && (
             <Button className="gap-2 rounded-full px-6" onClick={() => { setEditingItem(null); setIsDialogOpen(true); }}>
               <Plus className="h-4 w-4" /> Adicionar Item
             </Button>
@@ -93,8 +96,8 @@ const Inventory = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Button variant="outline" className="gap-2 rounded-xl">
-            <Filter className="h-4 w-4" /> Filtros
+          <Button variant="outline" className="gap-2 rounded-xl" onClick={fetchItems}>
+            <Filter className="h-4 w-4" /> Atualizar
           </Button>
         </div>
 
@@ -132,7 +135,10 @@ const Inventory = () => {
             </DialogHeader>
             <InventoryForm 
               item={editingItem} 
-              onSuccess={() => { setIsDialogOpen(false); fetchItems(); }} 
+              onSuccess={() => { 
+                setIsDialogOpen(false); 
+                fetchItems(); // Atualiza a lista automaticamente
+              }} 
             />
           </DialogContent>
         </Dialog>

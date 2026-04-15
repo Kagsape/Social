@@ -72,7 +72,9 @@ const App = () => (
             <Route path="/courses/:id" element={<ProtectedRoute><CourseDetails /></ProtectedRoute>} />
             <Route path="/courses/:id/lessons" element={<ProtectedRoute><CourseLessonsPage /></ProtectedRoute>} />
             <Route path="/student-file/:studentId" element={<ProtectedRoute allowedRoles={['teacher', 'admin']}><StudentFilePage /></ProtectedRoute>} />
-            <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+            
+            {/* Rota de Inventário aberta para todos os cargos autenticados */}
+            <Route path="/inventory" element={<ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}><Inventory /></ProtectedRoute>} />
 
             <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/courses" element={<ProtectedRoute allowedRoles={['admin']}><AdminCoursesPage /></ProtectedRoute>} />
