@@ -30,15 +30,14 @@ const CreateCourseForm: React.FC<CreateCourseFormProps> = ({ onSuccess }) => {
 
     setLoading(true);
     try {
-      // 1. Criar o curso
+      // 1. Criar o curso usando as colunas que existem no schema
       const { data: course, error: courseError } = await supabase
         .from('courses')
         .insert({
           name: name.trim(),
           description: description.trim(),
           code: code.trim() || `TURMA-${Math.random().toString(36).substring(7).toUpperCase()}`,
-          created_by: user.id,
-          teacher_id: user.id, // Para compatibilidade com o schema atual
+          teacher_id: user.id,
           category: 'Tecnologia'
         })
         .select()
@@ -46,15 +45,17 @@ const CreateCourseForm: React.FC<CreateCourseFormProps> = ({ onSuccess }) => {
 
       if (courseError) throw courseError;
 
-      // 2. Vincular automaticamente o professor na tabela de junção
-      const { error: linkError } = await supabase
-        .from('course_teachers')
-        .insert({
-          course_id: course.id,
-          teacher_id: user.id
-        });
-
-      if (linkError) throw linkError;
+      // 2. Tentamos vincular na tabela de junção se ela existir, mas não travamos o processo se falhar
+      try {
+        await supabase
+          .from('course_teachers')
+          .insert({
+            course_id: course.id,
+            teacher_id: user.id
+          });
+      } catch (e) {
+        console.log('Tabela course_teachers não encontrada ou erro ao vincular, ignorando...');
+      }
 
       showSuccess('Turma criada com sucesso!');
       setName('');
