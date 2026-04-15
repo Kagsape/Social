@@ -6,12 +6,9 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.2.1'
         classpath 'com.google.gms:google-services:4.4.0'
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20"
     }
 }
-
-// Define a versão do Kotlin solicitada
-ext.kotlin_version = '1.8.22'
 
 apply from: "variables.gradle"
 
@@ -19,24 +16,6 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-    }
-}
-
-// Força a resolução de conflitos em todos os subprojetos (incluindo plugins Capacitor)
-subprojects {
-    configurations.configureEach {
-        resolutionStrategy {
-            force "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-            
-            // Garante que dependências transitivas também usem a versão correta
-            eachDependency { DependencyResolveDetails details ->
-                if (details.requested.group == 'org.jetbrains.kotlin') {
-                    details.useVersion kotlin_version
-                }
-            }
-        }
     }
 }
 
