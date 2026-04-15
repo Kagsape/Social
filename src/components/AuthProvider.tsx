@@ -28,31 +28,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   const fetchUserProfile = useCallback(async (userId: string) => {
-    console.log(`[Auth:Profile] Iniciando busca de perfil para: ${userId}`);
+    console.log(`[Auth:Profile] Sincronizando permissões para: ${userId}`);
     try {
+      // 1. Buscar perfil básico (onde fica a 'tag' de role direta)
       const { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
 
-      if (profileError) {
-        console.error('[Auth:Profile] Erro na tabela users:', profileError.message);
-      }
+      if (profileError) console.error('[Auth:Profile] Erro users:', profileError.message);
 
+      // 2. Buscar cargos na tabela de relacionamento (RBAC)
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select('roles(name)')
         .eq('user_id', userId);
 
-      if (rolesError) {
-        console.error('[Auth:Profile] Erro na tabela user_roles:', rolesError.message);
-      }
+      if (rolesError) console.error('[Auth:Profile] Erro user_roles:', rolesError.message);
 
+      // 3. Mesclar cargos de ambas as fontes para compatibilidade total
       const rolesList = userRoles?.map((ur: any) => ur.roles?.name).filter(Boolean) || [];
+      
+      // Se o usuário tem um cargo definido no perfil (tag antiga/direta), adicionamos à lista
+      if (profile?.role && !rolesList.includes(profile.role)) {
+        console.log(`[Auth:Profile] Cargo '${profile.role}' detectado via perfil direto.`);
+        rolesList.push(profile.role);
+      }
+      
       setRoles(rolesList);
 
       if (profile) {
+        // 4. Buscar permissões detalhadas baseadas nos cargos identificados
         const { data: roleData } = await supabase
           .from('roles')
           .select('permissions')
@@ -66,7 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserProfile({ ...profile, permissions: mergedPermissions });
       }
     } catch (err) {
-      console.error('[Auth:Profile] Erro crítico inesperado:', err);
+      console.error('[Auth:Profile] Erro crítico:', err);
     }
   }, []);
 
@@ -76,20 +83,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initialize = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        
-        if (mounted) {
-          if (initialSession) {
-            setSession(initialSession);
-            setUser(initialSession.user);
-            fetchUserProfile(initialSession.user.id);
-          }
+        if (mounted && initialSession) {
+          setSession(initialSession);
+          setUser(initialSession.user);
+          fetchUserProfile(initialSession.user.id);
         }
       } catch (error) {
-        console.error('[Auth:Init] Erro fatal na inicialização:', error);
+        console.error('[Auth:Init] Erro:', error);
       } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
     };
 
@@ -100,18 +102,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
-          
-          if (currentSession?.user) {
-            fetchUserProfile(currentSession.user.id);
-          }
+          if (currentSession?.user) fetchUserProfile(currentSession.user.id);
           setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
           setUserProfile(null);
           setRoles([]);
-          setLoading(false);
-        } else if (event === 'INITIAL_SESSION') {
           setLoading(false);
         }
       }
@@ -164,7 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
           <div className="flex flex-col items-center gap-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            <p className="text-muted-foreground animate-pulse font-medium">Carregando portal...</p>
+            <p className="text-muted-foreground animate-pulse font-medium">Sincronizando acessos...</p>
           </div>
         </div>
       )}
