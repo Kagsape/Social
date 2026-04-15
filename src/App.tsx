@@ -36,6 +36,8 @@ import Events from "./pages/Events";
 import Help from "./pages/Help";
 import Search from "./pages/Search";
 import CompleteProfile from "./pages/CompleteProfile";
+import CourseLessonsPage from "./pages/CourseLessonsPage";
+import StudentFilePage from "./pages/StudentFilePage";
 
 const queryClient = new QueryClient();
 
@@ -55,103 +57,33 @@ const App = () => (
             <Route path="/search" element={<Search />} />
             <Route path="/complete-profile" element={<CompleteProfile />} />
             
-            {/* Public/Common Routes */}
             <Route path="/resources" element={<Resources />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/events" element={<Events />} />
             <Route path="/help" element={<Help />} />
             
-            {/* Common Protected Routes */}
-            <Route path="/feed" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <Feed />
-              </ProtectedRoute>
-            } />
-            <Route path="/messages" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <Messages />
-              </ProtectedRoute>
-            } />
-            <Route path="/profile" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <Profile />
-              </ProtectedRoute>
-            } />
-            <Route path="/profile/:id" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <UserProfile />
-              </ProtectedRoute>
-            } />
-            <Route path="/courses" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <CoursesPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/courses/:id" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
-                <CourseDetails />
-              </ProtectedRoute>
-            } />
+            <Route path="/feed" element={<ProtectedRoute><Feed /></ProtectedRoute>} />
+            <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/profile/:id" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+            <Route path="/courses" element={<ProtectedRoute><CoursesPage /></ProtectedRoute>} />
+            <Route path="/courses/:id" element={<ProtectedRoute><CourseDetails /></ProtectedRoute>} />
+            <Route path="/courses/:id/lessons" element={<ProtectedRoute><CourseLessonsPage /></ProtectedRoute>} />
+            <Route path="/student-file/:studentId" element={<ProtectedRoute allowedRoles={['teacher', 'admin']}><StudentFilePage /></ProtectedRoute>} />
 
-            {/* Admin Routes */}
-            <Route path="/admin" element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/courses" element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminCoursesPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/lab" element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <LabManagement />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/reservations" element={
-              <ProtectedRoute allowedRoles={['admin', 'teacher']}>
-                <ReservationsPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/users" element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminUsersPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/roles" element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminRolesPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/whitelist" element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminWhitelistPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/settings" element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminSettingsPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin/logs" element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminLogsPage />
-              </ProtectedRoute>
-            } />
+            <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/admin/courses" element={<ProtectedRoute allowedRoles={['admin']}><AdminCoursesPage /></ProtectedRoute>} />
+            <Route path="/admin/lab" element={<ProtectedRoute allowedRoles={['admin']}><LabManagement /></ProtectedRoute>} />
+            <Route path="/admin/reservations" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ReservationsPage /></ProtectedRoute>} />
+            <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><AdminUsersPage /></ProtectedRoute>} />
+            <Route path="/admin/roles" element={<ProtectedRoute allowedRoles={['admin']}><AdminRolesPage /></ProtectedRoute>} />
+            <Route path="/admin/whitelist" element={<ProtectedRoute allowedRoles={['admin']}><AdminWhitelistPage /></ProtectedRoute>} />
+            <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettingsPage /></ProtectedRoute>} />
+            <Route path="/admin/logs" element={<ProtectedRoute allowedRoles={['admin']}><AdminLogsPage /></ProtectedRoute>} />
 
-            {/* Role Specific Dashboards */}
-            <Route path="/dashboard" element={
-              <ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}>
-                <StudentDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/teacher" element={
-              <ProtectedRoute allowedRoles={['teacher']}>
-                <TeacherDashboard />
-              </ProtectedRoute>
-            } />
+            <Route path="/dashboard" element={<ProtectedRoute><StudentDashboard /></ProtectedRoute>} />
+            <Route path="/teacher" element={<ProtectedRoute allowedRoles={['teacher']}><TeacherDashboard /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -4,8 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { BookOpen, Users, Monitor, Calendar, Plus, BarChart3, UserCheck, GraduationCap } from 'lucide-react';
+import { BookOpen, Users, Monitor, Calendar, GraduationCap, UserCheck, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
@@ -15,9 +14,10 @@ import GradeForm from '@/components/GradeForm';
 import AnnouncementForm from '@/components/AnnouncementForm';
 import ComputerReservationForm from '@/components/ComputerReservationForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const TeacherDashboard = () => {
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalStudents: 0,
@@ -43,12 +43,11 @@ const TeacherDashboard = () => {
   const fetchTeacherData = async () => {
     setLoading(true);
     try {
-      const { data: teacherCourses, error: coursesError } = await supabase
+      const { data: teacherCourses } = await supabase
         .from('courses')
         .select('*')
         .eq('teacher_id', user?.id);
 
-      if (coursesError) throw coursesError;
       setCourses(teacherCourses || []);
       if (teacherCourses && teacherCourses.length > 0) {
         setSelectedCourse(teacherCourses[0].id);
@@ -71,7 +70,7 @@ const TeacherDashboard = () => {
         activeReservations: reservations?.length || 0
       });
     } catch (error) {
-      console.error('Error fetching teacher data:', error);
+      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
@@ -79,30 +78,21 @@ const TeacherDashboard = () => {
 
   const fetchCourseStudents = async (courseId: string) => {
     try {
-      const { data: enrollments, error } = await supabase
+      const { data: enrollments } = await supabase
         .from('enrollments')
         .select(`
           student_id,
-          users!enrollments_student_id_fkey (id, name)
+          users!enrollments_student_id_fkey (id, name, avatar_url, student_id)
         `)
         .eq('course_id', courseId);
 
-      if (error) throw error;
       setStudents(enrollments?.map(e => e.users) || []);
     } catch (error) {
-      console.error('Error fetching course students:', error);
+      console.error('Error:', error);
     }
   };
 
-  if (loading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      </Layout>
-    );
-  }
+  if (loading) return <Layout><div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div></Layout>;
 
   return (
     <Layout>
@@ -110,9 +100,9 @@ const TeacherDashboard = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">Painel do Professor</h1>
-            <p className="text-muted-foreground">Gerencie suas turmas, conteúdo e reservas.</p>
+            <p className="text-muted-foreground">Gerencie suas turmas e acompanhamento pedagógico.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
             <select 
               className="p-2 border rounded-lg bg-background w-full md:w-auto"
               value={selectedCourse}
@@ -122,63 +112,54 @@ const TeacherDashboard = () => {
                 <option key={course.id} value={course.id}>{course.name}</option>
               ))}
             </select>
+            <Link to={`/courses/${selectedCourse}/lessons`}>
+              <Button className="gap-2">
+                <BookOpen className="h-4 w-4" /> Ver Aulas
+              </Button>
+            </Link>
           </div>
         </div>
 
         <DashboardStats stats={stats} />
 
-        <Tabs defaultValue="announcements" className="space-y-6">
-          <div className="w-full overflow-x-auto pb-1 scrollbar-hide">
-            <TabsList className="bg-muted/50 p-1 rounded-xl inline-flex min-w-full md:min-w-0">
-              <TabsTrigger value="announcements" className="rounded-lg gap-2 whitespace-nowrap">
-                <Calendar className="h-4 w-4" /> Avisos
-              </TabsTrigger>
-              <TabsTrigger value="attendance" className="rounded-lg gap-2 whitespace-nowrap">
-                <UserCheck className="h-4 w-4" /> Frequência
-              </TabsTrigger>
-              <TabsTrigger value="grades" className="rounded-lg gap-2 whitespace-nowrap">
-                <GraduationCap className="h-4 w-4" /> Notas
-              </TabsTrigger>
-              <TabsTrigger value="reservations" className="rounded-lg gap-2 whitespace-nowrap">
-                <Monitor className="h-4 w-4" /> Reservar Lab
-              </TabsTrigger>
-            </TabsList>
-          </div>
+        <Tabs defaultValue="students" className="space-y-6">
+          <TabsList className="bg-muted/50 p-1 rounded-xl">
+            <TabsTrigger value="students" className="gap-2"><Users className="h-4 w-4" /> Alunos</TabsTrigger>
+            <TabsTrigger value="attendance" className="gap-2"><UserCheck className="h-4 w-4" /> Frequência</TabsTrigger>
+            <TabsTrigger value="grades" className="gap-2"><GraduationCap className="h-4 w-4" /> Notas</TabsTrigger>
+            <TabsTrigger value="reservations" className="gap-2"><Monitor className="h-4 w-4" /> Lab</TabsTrigger>
+          </TabsList>
 
-          <TabsContent value="announcements">
-            <AnnouncementForm courseId={selectedCourse} onAnnouncementCreated={() => {}} />
+          <TabsContent value="students">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {students.map(student => (
+                <Link key={student.id} to={`/student-file/${student.id}`}>
+                  <Card className="hover:shadow-md transition-all group">
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src={student.avatar_url} />
+                          <AvatarFallback>{student.name?.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-bold text-sm group-hover:text-primary transition-colors">{student.name}</p>
+                          <p className="text-xs text-muted-foreground">Matrícula: {student.student_id}</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
           </TabsContent>
 
           <TabsContent value="attendance">
-            {selectedCourse ? (
-              <AttendanceForm 
-                courseId={selectedCourse} 
-                students={students} 
-                onAttendanceSaved={() => {}} 
-              />
-            ) : (
-              <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  Selecione um curso para gerenciar a frequência.
-                </CardContent>
-              </Card>
-            )}
+            <AttendanceForm courseId={selectedCourse} students={students} />
           </TabsContent>
 
           <TabsContent value="grades">
-            {selectedCourse ? (
-              <GradeForm 
-                courseId={selectedCourse} 
-                students={students} 
-                onGradesSaved={() => {}} 
-              />
-            ) : (
-              <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  Selecione um curso para gerenciar as notas.
-                </CardContent>
-              </Card>
-            )}
+            <GradeForm courseId={selectedCourse} students={students} />
           </TabsContent>
 
           <TabsContent value="reservations">
@@ -190,4 +171,5 @@ const TeacherDashboard = () => {
   );
 };
 
+import { Loader2 } from 'lucide-react';
 export default TeacherDashboard;
