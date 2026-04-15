@@ -29,7 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = useCallback(async (userId: string) => {
     try {
-      // 1. Buscar perfil básico
+      // 1. Buscar perfil básico do usuário
       const { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (profileError) throw profileError;
 
-      // 2. Buscar cargos do usuário
+      // 2. Buscar cargos vinculados ao usuário
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select('roles(name)')
@@ -50,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setRoles(rolesList);
 
       if (profile) {
-        // 3. Buscar permissões baseadas nos cargos
+        // 3. Buscar permissões baseadas nos cargos para controle granular
         const { data: roleData } = await supabase
           .from('roles')
           .select('permissions')
@@ -77,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initialize = async () => {
       try {
-        // Pega a sessão inicial
+        // Recupera a sessão inicial do armazenamento local
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         
         if (mounted) {
@@ -98,10 +98,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initialize();
 
-    // Escuta mudanças de estado (Login, Logout, Token Refresh)
+    // Escuta mudanças de estado em tempo real (Login, Logout, Refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log(`[Auth] Evento: ${event}`);
+        console.log(`[Auth] Evento detectado: ${event}`);
         
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
