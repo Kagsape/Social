@@ -10,6 +10,9 @@ buildscript {
     }
 }
 
+// Define a versão do Kotlin solicitada
+ext.kotlin_version = '1.8.22'
+
 apply from: "variables.gradle"
 
 allprojects {
@@ -19,25 +22,19 @@ allprojects {
     }
 }
 
-// Estratégia de resolução global aplicada antes da resolução das configurações
+// Força a resolução de conflitos em todos os subprojetos (incluindo plugins Capacitor)
 subprojects {
     configurations.configureEach {
         resolutionStrategy {
-            force "androidx.core:core:1.12.0"
-            force "androidx.core:core-ktx:1.12.0"
-            force "androidx.activity:activity:1.7.2"
-
-            eachDependency { DependencyResolveDetails details ->
-                // Força a versão do Kotlin 1.8.22 em todo o ecossistema do projeto
-                if (details.requested.group == 'org.jetbrains.kotlin') {
-                    details.useVersion rootProject.ext.kotlinVersion
-                }
-            }
+            force "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
             
-            // Resolve o erro de 'Duplicate class' substituindo jdk7/jdk8 pela stdlib principal
-            dependencySubstitution {
-                substitute module("org.jetbrains.kotlin:kotlin-stdlib-jdk7") using module("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
-                substitute module("org.jetbrains.kotlin:kotlin-stdlib-jdk8") using module("org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}")
+            // Garante que dependências transitivas também usem a versão correta
+            eachDependency { DependencyResolveDetails details ->
+                if (details.requested.group == 'org.jetbrains.kotlin') {
+                    details.useVersion kotlin_version
+                }
             }
         }
     }

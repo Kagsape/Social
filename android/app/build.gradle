@@ -37,6 +37,9 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$rootProject.ext.androidxAppCompatVersion"
     implementation "androidx.core:core:$rootProject.ext.androidxCoreVersion"
     implementation "androidx.activity:activity:$rootProject.ext.androidxActivityVersion"
+    
+    // Força o uso da stdlib 1.8.22 no módulo app
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 }
 
 apply from: 'capacitor.build.gradle'
