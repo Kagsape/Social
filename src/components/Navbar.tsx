@@ -19,7 +19,8 @@ import {
   GraduationCap,
   ChevronDown,
   HelpCircle,
-  Package
+  Package,
+  Monitor
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -75,7 +76,7 @@ const Navbar = () => {
     { name: 'Feed', path: '/feed', icon: Users, protected: true },
     { name: 'Mensagens', path: '/messages', icon: MessageSquare, protected: true },
     { name: 'Cursos', path: '/courses', icon: BookOpen, protected: true },
-    { name: 'Inventário', path: '/inventory', icon: Package, protected: true },
+    { name: 'Laboratório', path: '/inventory', icon: Monitor, protected: true },
   ];
 
   const secondaryItems = [
