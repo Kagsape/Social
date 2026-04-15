@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Users, Monitor, GraduationCap, UserCheck, ChevronRight, Loader2 } from 'lucide-react';
+import { BookOpen, Users, Monitor, GraduationCap, UserCheck, ChevronRight, Loader2, Plus, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { Link, useNavigate } from 'react-router-dom';
@@ -12,12 +12,13 @@ import DashboardStats from '@/components/DashboardStats';
 import AttendanceForm from '@/components/AttendanceForm';
 import GradeForm from '@/components/GradeForm';
 import ComputerReservationForm from '@/components/ComputerReservationForm';
+import CreateCourseForm from '@/components/CreateCourseForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { showError } from '@/utils/toast';
 
 const TeacherDashboard = () => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalCourses: 0,
@@ -28,6 +29,7 @@ const TeacherDashboard = () => {
   const [selectedCourse, setSelectedCourse] = useState<string>('');
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -50,7 +52,7 @@ const TeacherDashboard = () => {
         .eq('teacher_id', user?.id);
 
       setCourses(teacherCourses || []);
-      if (teacherCourses && teacherCourses.length > 0) {
+      if (teacherCourses && teacherCourses.length > 0 && !selectedCourse) {
         setSelectedCourse(teacherCourses[0].id);
       }
 
@@ -111,9 +113,17 @@ const TeacherDashboard = () => {
             <h1 className="text-3xl font-bold">Painel do Professor</h1>
             <p className="text-muted-foreground">Gerencie suas turmas e acompanhamento pedagógico.</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Button 
+              variant={showCreateForm ? "outline" : "default"} 
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="gap-2 rounded-xl"
+            >
+              {showCreateForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showCreateForm ? "Cancelar" : "Nova Turma"}
+            </Button>
             <select 
-              className="p-2 border rounded-lg bg-background w-full md:w-auto"
+              className="p-2 border rounded-xl bg-background w-full md:w-auto h-10 text-sm"
               value={selectedCourse}
               onChange={(e) => setSelectedCourse(e.target.value)}
             >
@@ -122,11 +132,17 @@ const TeacherDashboard = () => {
                 <option key={course.id} value={course.id}>{course.name}</option>
               ))}
             </select>
-            <Button onClick={handleGoToLessons} className="gap-2" disabled={!selectedCourse || selectedCourse === 'none'}>
-              <BookOpen className="h-4 w-4" /> Ver Aulas
+            <Button onClick={handleGoToLessons} variant="secondary" className="gap-2 rounded-xl h-10" disabled={!selectedCourse || selectedCourse === 'none'}>
+              <BookOpen className="h-4 w-4" /> Aulas
             </Button>
           </div>
         </div>
+
+        {showCreateForm && (
+          <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+            <CreateCourseForm onSuccess={() => { setShowCreateForm(false); fetchTeacherData(); }} />
+          </div>
+        )}
 
         <DashboardStats stats={stats} />
 
@@ -140,25 +156,31 @@ const TeacherDashboard = () => {
 
           <TabsContent value="students">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {students.map(student => (
-                <Link key={student.id} to={`/student-file/${student.id}`}>
-                  <Card className="hover:shadow-md transition-all group">
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={student.avatar_url} />
-                          <AvatarFallback>{student.name?.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-bold text-sm group-hover:text-primary transition-colors">{student.name}</p>
-                          <p className="text-xs text-muted-foreground">Matrícula: {student.student_id}</p>
+              {students.length === 0 ? (
+                <div className="col-span-full text-center py-12 text-muted-foreground border-2 border-dashed rounded-2xl">
+                  Nenhum aluno matriculado nesta turma.
+                </div>
+              ) : (
+                students.map(student => (
+                  <Link key={student.id} to={`/student-file/${student.id}`}>
+                    <Card className="hover:shadow-md transition-all group border-none shadow-sm">
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarImage src={student.avatar_url} />
+                            <AvatarFallback>{student.name?.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-bold text-sm group-hover:text-primary transition-colors">{student.name}</p>
+                            <p className="text-xs text-muted-foreground">Matrícula: {student.student_id}</p>
+                          </div>
                         </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))
+              )}
             </div>
           </TabsContent>
 
