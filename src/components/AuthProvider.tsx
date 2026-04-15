@@ -10,6 +10,10 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   userProfile: any | null;
+  roles: string[];
+  isAdmin: boolean;
+  isTeacher: boolean;
+  isStudent: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -22,193 +26,111 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
+  const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
-  
-  const profileLoadingRef = useRef<string | null>(null);
-  const profileLoadedRef = useRef<string | null>(null);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const updateOnlineStatus = useCallback(async (userId: string, isOnline: boolean) => {
+  const fetchUserProfile = useCallback(async (userId: string) => {
     try {
-      await supabase
-        .from('users')
-        .update({ 
-          is_online: isOnline, 
-          last_seen: new Date().toISOString() 
-        })
-        .eq('id', userId);
-    } catch (err) {
-      console.error('[Auth] Erro ao atualizar status online:', err);
-    }
-  }, []);
-
-  const stopHeartbeat = useCallback(() => {
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = null;
-    }
-  }, []);
-
-  const startHeartbeat = useCallback((userId: string) => {
-    stopHeartbeat();
-    heartbeatIntervalRef.current = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        updateOnlineStatus(userId, true);
-      }
-    }, 30000);
-  }, [updateOnlineStatus, stopHeartbeat]);
-
-  const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
-    if (profileLoadingRef.current === userId) return;
-    profileLoadingRef.current = userId;
-    
-    try {
-      const { data: profile, error } = await supabase
+      // 1. Buscar perfil básico
+      const { data: profile } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
 
-      if (error) throw error;
+      // 2. Buscar múltiplos cargos do usuário
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('roles(name)')
+        .eq('user_id', userId);
 
-      let finalProfile = profile;
+      const rolesList = userRoles?.map((ur: any) => ur.roles.name) || [];
+      setRoles(rolesList);
 
-      if (!profile) {
-        const { data: newProfile } = await supabase
-          .from('users')
-          .upsert({
-            id: userId,
-            name: currentUser.user_metadata?.name || 'Usuário',
-            email: currentUser.email,
-            role: currentUser.user_metadata?.role || 'student',
-            student_id: currentUser.user_metadata?.student_id || null,
-            teacher_id: currentUser.user_metadata?.teacher_id || null
-          })
-          .select('*')
-          .single();
-        finalProfile = newProfile;
-      }
-
-      if (finalProfile) {
+      if (profile) {
+        // Buscar permissões baseadas no cargo principal ou combinadas
         const { data: roleData } = await supabase
           .from('roles')
           .select('permissions')
-          .eq('name', finalProfile.role)
-          .maybeSingle();
+          .in('name', rolesList);
         
-        finalProfile.permissions = roleData?.permissions || {};
-        setUserProfile(finalProfile);
-        profileLoadedRef.current = userId;
-        
-        updateOnlineStatus(userId, true);
-        startHeartbeat(userId);
+        // Mesclar todas as permissões dos cargos que o usuário possui
+        const mergedPermissions = roleData?.reduce((acc, curr) => ({
+          ...acc,
+          ...(curr.permissions || {})
+        }), {}) || {};
+
+        setUserProfile({ ...profile, permissions: mergedPermissions });
       }
     } catch (err) {
-      console.error('[Auth] Erro ao carregar perfil:', err);
-    } finally {
-      profileLoadingRef.current = null;
+      console.error('[Auth] Erro ao carregar perfil e cargos:', err);
     }
-  }, [updateOnlineStatus, startHeartbeat]);
-
-  // Função de Logout Centralizada
-  const signOut = async () => {
-    setLoading(true);
-    try {
-      // 1. Atualiza status para offline antes de sair
-      if (user) {
-        await updateOnlineStatus(user.id, false);
-      }
-      
-      stopHeartbeat();
-
-      // 2. Chama o signOut do Supabase
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-
-      // 3. Limpeza manual de estados (Garante atualização da UI mesmo se o listener demorar)
-      setSession(null);
-      setUser(null);
-      setUserProfile(null);
-      profileLoadedRef.current = null;
-
-      // 4. Redirecionamento explícito
-      navigate('/login', { replace: true });
-      
-    } catch (error: any) {
-      console.error('[Auth] Erro ao sair:', error.message);
-      showError('Erro ao encerrar sessão. Tente novamente.');
-      
-      // Força a limpeza local mesmo em caso de erro de rede
-      setSession(null);
-      setUser(null);
-      setUserProfile(null);
-      navigate('/login', { replace: true });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, []);
 
   useEffect(() => {
-    // Inicialização da sessão
     const initAuth = async () => {
       const { data: { session: initialSession } } = await supabase.auth.getSession();
       if (initialSession) {
         setSession(initialSession);
         setUser(initialSession.user);
-        fetchUserProfile(initialSession.user.id, initialSession.user);
+        await fetchUserProfile(initialSession.user.id);
       }
       setLoading(false);
     };
 
     initAuth();
 
-    // Listener Global de Eventos de Autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log(`[Auth] Evento detectado: ${event}`);
-        
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          const currentUser = currentSession?.user ?? null;
           setSession(currentSession);
-          setUser(currentUser);
-          if (currentUser && profileLoadedRef.current !== currentUser.id) {
-            fetchUserProfile(currentUser.id, currentUser);
+          setUser(currentSession?.user ?? null);
+          if (currentSession?.user) {
+            await fetchUserProfile(currentSession.user.id);
           }
         } else if (event === 'SIGNED_OUT') {
-          stopHeartbeat();
           setSession(null);
           setUser(null);
           setUserProfile(null);
-          profileLoadedRef.current = null;
-          navigate('/login', { replace: true });
+          setRoles([]);
         }
       }
     );
 
-    return () => {
-      subscription.unsubscribe();
-      stopHeartbeat();
-    };
-  }, [fetchUserProfile, stopHeartbeat, navigate]);
+    return () => subscription.unsubscribe();
+  }, [fetchUserProfile]);
 
-  const hasPermission = (permission: string) => {
-    if (user?.email === CHIEF_ADMIN_EMAIL) return true;
-    if (!userProfile || !userProfile.permissions) return false;
-    return !!userProfile.permissions[permission];
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
   };
 
   const refreshProfile = async () => {
-    if (user) {
-      profileLoadedRef.current = null;
-      await fetchUserProfile(user.id, user);
-    }
+    if (user) await fetchUserProfile(user.id);
+  };
+
+  const hasPermission = (permission: string) => {
+    if (roles.includes('admin')) return true;
+    return !!userProfile?.permissions?.[permission];
+  };
+
+  const value = {
+    session,
+    user,
+    userProfile,
+    roles,
+    isAdmin: roles.includes('admin'),
+    isTeacher: roles.includes('teacher'),
+    isStudent: roles.includes('student'),
+    loading,
+    signOut,
+    refreshProfile,
+    hasPermission
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, userProfile, loading, signOut, refreshProfile, hasPermission }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

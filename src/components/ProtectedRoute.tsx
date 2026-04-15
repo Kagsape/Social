@@ -10,10 +10,8 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles = [] }) => {
-  const { user, userProfile, loading } = useAuth();
+  const { user, roles, isAdmin, loading, userProfile } = useAuth();
   const location = useLocation();
-
-  const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
 
   if (loading) {
     return (
@@ -27,19 +25,23 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Bypass total para o Admin Chefe
-  if (user.email === CHIEF_ADMIN_EMAIL) {
+  // Admin sempre tem acesso
+  if (isAdmin) {
     return <>{children}</>;
   }
 
-  // Se o usuário está logado mas NÃO tem matrícula, e NÃO está na página de completar perfil, redireciona
+  // Validação de matrícula obrigatória (exceto se estiver completando perfil)
   const hasNoId = userProfile && !userProfile.student_id && !userProfile.teacher_id;
   if (hasNoId && location.pathname !== '/complete-profile') {
     return <Navigate to="/complete-profile" replace />;
   }
 
-  if (allowedRoles.length > 0 && userProfile && !allowedRoles.includes(userProfile.role)) {
-    return <Navigate to="/" replace />;
+  // Verifica se o usuário possui algum dos cargos permitidos
+  if (allowedRoles.length > 0) {
+    const hasRequiredRole = roles.some(role => allowedRoles.includes(role));
+    if (!hasRequiredRole) {
+      return <Navigate to="/" replace />;
+    }
   }
 
   return <>{children}</>;
