@@ -9,7 +9,6 @@
         android:targetSdkVersion="34" />
 
     <!-- Permissions -->
-
     <uses-permission android:name="android.permission.INTERNET" />
 
     <permission
@@ -40,6 +39,18 @@
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Intent Filter para Deep Linking do Supabase -->
+            <intent-filter android:autoVerify="true" >
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="auth"
+                    android:scheme="com.ciep165.app" />
             </intent-filter>
         </activity>
 

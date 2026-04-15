@@ -52,7 +52,7 @@ const Login = () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: 'com.ciep165.app://auth'
+        redirectTo: 'socialapp://auth'
       }
     });
 
