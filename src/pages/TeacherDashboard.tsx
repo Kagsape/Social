@@ -2,22 +2,23 @@
 
 import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Users, Monitor, Calendar, GraduationCap, UserCheck, ChevronRight } from 'lucide-react';
+import { BookOpen, Users, Monitor, GraduationCap, UserCheck, ChevronRight, Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import DashboardStats from '@/components/DashboardStats';
 import AttendanceForm from '@/components/AttendanceForm';
 import GradeForm from '@/components/GradeForm';
-import AnnouncementForm from '@/components/AnnouncementForm';
 import ComputerReservationForm from '@/components/ComputerReservationForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { showError } from '@/utils/toast';
 
 const TeacherDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalStudents: 0,
@@ -35,7 +36,7 @@ const TeacherDashboard = () => {
   }, [user]);
 
   useEffect(() => {
-    if (selectedCourse) {
+    if (selectedCourse && selectedCourse !== 'none') {
       fetchCourseStudents(selectedCourse);
     }
   }, [selectedCourse]);
@@ -92,7 +93,15 @@ const TeacherDashboard = () => {
     }
   };
 
-  if (loading) return <Layout><div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div></Layout>;
+  const handleGoToLessons = () => {
+    if (!selectedCourse || selectedCourse === 'none') {
+      showError('Selecione um curso primeiro.');
+      return;
+    }
+    navigate(`/courses/${selectedCourse}/lessons`);
+  };
+
+  if (loading) return <Layout><div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10" /></div></Layout>;
 
   return (
     <Layout>
@@ -108,15 +117,14 @@ const TeacherDashboard = () => {
               value={selectedCourse}
               onChange={(e) => setSelectedCourse(e.target.value)}
             >
+              {courses.length === 0 && <option value="none">Nenhum curso</option>}
               {courses.map(course => (
                 <option key={course.id} value={course.id}>{course.name}</option>
               ))}
             </select>
-            <Link to={`/courses/${selectedCourse}/lessons`}>
-              <Button className="gap-2">
-                <BookOpen className="h-4 w-4" /> Ver Aulas
-              </Button>
-            </Link>
+            <Button onClick={handleGoToLessons} className="gap-2" disabled={!selectedCourse || selectedCourse === 'none'}>
+              <BookOpen className="h-4 w-4" /> Ver Aulas
+            </Button>
           </div>
         </div>
 
@@ -171,5 +179,4 @@ const TeacherDashboard = () => {
   );
 };
 
-import { Loader2 } from 'lucide-react';
 export default TeacherDashboard;

@@ -1,16 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { useLessons } from '@/hooks/useLessons';
 import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { BookOpen, FileText, ExternalLink, Lock, Loader2, Plus } from 'lucide-react';
+import { BookOpen, FileText, ExternalLink, Lock, Loader2, Plus, ArrowLeft } from 'lucide-react';
 import LessonReportForm from '@/components/LessonReportForm';
 import InternalNotesForm from '@/components/InternalNotesForm';
+import { showError } from '@/utils/toast';
 import {
   Dialog,
   DialogContent,
@@ -21,23 +21,42 @@ import {
 
 const CourseLessonsPage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { userProfile } = useAuth();
-  const { lessons, loading, fetchLessons } = useLessons(id);
   const [showForm, setShowForm] = useState(false);
 
+  // Validação de UUID
+  const isValidUuid = id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  
+  const { lessons, loading, fetchLessons } = useLessons(isValidUuid ? id : undefined);
+
   useEffect(() => {
+    console.log('[CourseLessons] ID capturado:', id);
+    if (!isValidUuid) {
+      console.error('[CourseLessons] ID inválido:', id);
+      showError('ID do curso inválido.');
+      navigate('/courses');
+      return;
+    }
     fetchLessons();
-  }, [fetchLessons]);
+  }, [id, isValidUuid, fetchLessons, navigate]);
 
   const isTeacher = userProfile?.role === 'teacher' || userProfile?.role === 'admin';
+
+  if (!isValidUuid) return null;
 
   return (
     <Layout>
       <div className="space-y-8">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Aulas e Materiais</h1>
-            <p className="text-muted-foreground">Acompanhe o conteúdo programático do curso.</p>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold">Aulas e Materiais</h1>
+              <p className="text-muted-foreground">Acompanhe o conteúdo programático do curso.</p>
+            </div>
           </div>
           {isTeacher && (
             <Button onClick={() => setShowForm(!showForm)} className="gap-2">

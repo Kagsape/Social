@@ -15,8 +15,6 @@ import {
   CheckCircle2, 
   ArrowLeft,
   User,
-  FileText,
-  AlertCircle,
   Loader2
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -33,9 +31,19 @@ const CourseDetails = () => {
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
 
+  // Validação de UUID (Regex para formato padrão de UUID)
+  const isValidUuid = id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
   useEffect(() => {
     const fetchData = async () => {
-      if (!id) return;
+      console.log('[CourseDetails] ID capturado:', id);
+      
+      if (!isValidUuid) {
+        console.error('[CourseDetails] ID inválido detectado:', id);
+        showError('Curso não encontrado ou ID inválido.');
+        navigate('/courses');
+        return;
+      }
       
       setLoading(true);
       try {
@@ -78,8 +86,8 @@ const CourseDetails = () => {
           
           setIsEnrolled(!!enrollment);
         }
-      } catch (error) {
-        console.error('Erro ao buscar dados do curso:', error);
+      } catch (error: any) {
+        console.error('[CourseDetails] Erro ao buscar dados:', error);
         showError('Erro ao carregar informações do curso.');
       } finally {
         setLoading(false);
@@ -87,13 +95,10 @@ const CourseDetails = () => {
     };
 
     fetchData();
-  }, [id, user, navigate]);
+  }, [id, isValidUuid, user, navigate]);
 
   const handleEnroll = async () => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
+    if (!user || !id) return;
 
     setEnrolling(true);
     try {
@@ -112,7 +117,7 @@ const CourseDetails = () => {
       setStudentCount(prev => prev + 1);
     } catch (error: any) {
       console.error('Erro ao realizar matrícula:', error);
-      showError(error.message || 'Erro ao realizar matrícula. Verifique se você já está matriculado.');
+      showError(error.message || 'Erro ao realizar matrícula.');
     } finally {
       setEnrolling(false);
     }
@@ -130,7 +135,6 @@ const CourseDetails = () => {
 
   if (!course) return null;
 
-  // Permitir matrícula para alunos e admins (para testes)
   const canEnroll = userProfile?.role === 'student' || userProfile?.role === 'admin';
 
   return (
