@@ -66,14 +66,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }), {}) || {};
 
         setUserProfile({ ...profile, permissions: mergedPermissions });
-      } else {
-        setUserProfile(null);
       }
     } catch (err) {
       console.error('[Auth] Erro crítico em fetchUserProfile:', err);
-      // Não relançamos o erro para não travar o fluxo de autenticação
-      setUserProfile(null);
-      setRoles([]);
+      // Falhas no perfil não devem resetar a sessão, apenas manter o perfil como null
     }
   }, []);
 
@@ -82,21 +78,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initialize = async () => {
       try {
-        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
         
-        if (sessionError) throw sessionError;
-
         if (mounted) {
           if (initialSession) {
             setSession(initialSession);
             setUser(initialSession.user);
-            await fetchUserProfile(initialSession.user.id);
+            // Chamada em segundo plano: NÃO usamos await aqui
+            fetchUserProfile(initialSession.user.id);
           }
         }
       } catch (error) {
         console.error('[Auth] Erro na inicialização da sessão:', error);
       } finally {
         if (mounted) {
+          // Libera a interface imediatamente
           setLoading(false);
         }
       }
@@ -108,20 +104,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, currentSession) => {
         console.log(`[Auth] Evento detectado: ${event}`);
         
-        // Se o evento for de login ou refresh, garantimos que o loading seja tratado
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          try {
-            setSession(currentSession);
-            setUser(currentSession?.user ?? null);
-            
-            if (currentSession?.user) {
-              await fetchUserProfile(currentSession.user.id);
-            }
-          } catch (error) {
-            console.error('[Auth] Erro ao processar mudança de estado:', error);
-          } finally {
-            setLoading(false);
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          
+          if (currentSession?.user) {
+            // Chamada em segundo plano: NÃO usamos await aqui
+            fetchUserProfile(currentSession.user.id);
           }
+          // Libera a interface imediatamente após definir o usuário
+          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
@@ -129,7 +121,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setRoles([]);
           setLoading(false);
         } else if (event === 'INITIAL_SESSION') {
-          // O initialize já cuida disso, mas garantimos o loading false aqui também
           setLoading(false);
         }
       }
