@@ -2,12 +2,12 @@ apply plugin: 'com.android.application'
 
 android {
     namespace "com.ciep165.app"
-    compileSdkVersion 34
+    compileSdkVersion rootProject.ext.compileSdkVersion
 
     defaultConfig {
         applicationId "com.ciep165.app"
-        minSdkVersion 24
-        targetSdkVersion 34
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -34,10 +34,10 @@ repositories {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation "androidx.appcompat:appcompat:1.6.1"
-    implementation "androidx.core:core:1.12.0"
-    implementation "androidx.activity:activity:1.7.2"
-    implementation project(':capacitor-android')
+    implementation "androidx.appcompat:appcompat:$rootProject.ext.androidxAppCompatVersion"
+    implementation "androidx.core:core:$rootProject.ext.androidxCoreVersion"
+    implementation "androidx.activity:activity:$rootProject.ext.androidxActivityVersion"
+    // O projeto :capacitor-android é adicionado via capacitor.build.gradle
 }
 
 apply from: 'capacitor.build.gradle'
