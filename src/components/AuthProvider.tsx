@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
+import { showError } from '@/utils/toast';
 
 interface AuthContextType {
   session: Session | null;
@@ -21,10 +23,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const CHIEF_ADMIN_EMAIL = 'xakatosh66@gmail.com';
   
-  const initializedRef = useRef(false);
   const profileLoadingRef = useRef<string | null>(null);
   const profileLoadedRef = useRef<string | null>(null);
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -43,17 +45,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const startHeartbeat = useCallback((userId: string) => {
-    if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-    
-    // Atualiza a cada 30 segundos para manter o "visto por último" fresco
-    heartbeatIntervalRef.current = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        updateOnlineStatus(userId, true);
-      }
-    }, 30000);
-  }, [updateOnlineStatus]);
-
   const stopHeartbeat = useCallback(() => {
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
@@ -61,17 +52,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const hasPermission = (permission: string) => {
-    if (user?.email === CHIEF_ADMIN_EMAIL) return true;
-    if (!userProfile || !userProfile.permissions) return false;
-    return !!userProfile.permissions[permission];
-  };
+  const startHeartbeat = useCallback((userId: string) => {
+    stopHeartbeat();
+    heartbeatIntervalRef.current = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        updateOnlineStatus(userId, true);
+      }
+    }, 30000);
+  }, [updateOnlineStatus, stopHeartbeat]);
 
   const fetchUserProfile = useCallback(async (userId: string, currentUser: User) => {
-    if (profileLoadingRef.current === userId || profileLoadedRef.current === userId) {
-      return;
-    }
-
+    if (profileLoadingRef.current === userId) return;
     profileLoadingRef.current = userId;
     
     try {
@@ -84,21 +75,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       let finalProfile = profile;
-
-      if (profile) {
-        const metaRole = currentUser.user_metadata?.role;
-        const needsUpdate = metaRole && profile.role !== metaRole && profile.role === 'student';
-        
-        if (needsUpdate) {
-          const { data: updatedProfile } = await supabase
-            .from('users')
-            .update({ role: metaRole })
-            .eq('id', userId)
-            .select('*')
-            .single();
-          if (updatedProfile) finalProfile = updatedProfile;
-        }
-      }
 
       if (!profile) {
         const { data: newProfile } = await supabase
@@ -127,7 +103,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserProfile(finalProfile);
         profileLoadedRef.current = userId;
         
-        // Inicia o sistema de presença
         updateOnlineStatus(userId, true);
         startHeartbeat(userId);
       }
@@ -138,26 +113,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [updateOnlineStatus, startHeartbeat]);
 
-  useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
+  // Função de Logout Centralizada
+  const signOut = async () => {
+    setLoading(true);
+    try {
+      // 1. Atualiza status para offline antes de sair
+      if (user) {
+        await updateOnlineStatus(user.id, false);
+      }
+      
+      stopHeartbeat();
 
-    const initialize = async () => {
+      // 2. Chama o signOut do Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      // 3. Limpeza manual de estados (Garante atualização da UI mesmo se o listener demorar)
+      setSession(null);
+      setUser(null);
+      setUserProfile(null);
+      profileLoadedRef.current = null;
+
+      // 4. Redirecionamento explícito
+      navigate('/login', { replace: true });
+      
+    } catch (error: any) {
+      console.error('[Auth] Erro ao sair:', error.message);
+      showError('Erro ao encerrar sessão. Tente novamente.');
+      
+      // Força a limpeza local mesmo em caso de erro de rede
+      setSession(null);
+      setUser(null);
+      setUserProfile(null);
+      navigate('/login', { replace: true });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Inicialização da sessão
+    const initAuth = async () => {
       const { data: { session: initialSession } } = await supabase.auth.getSession();
       if (initialSession) {
         setSession(initialSession);
         setUser(initialSession.user);
+        fetchUserProfile(initialSession.user.id, initialSession.user);
       }
       setLoading(false);
     };
 
-    initialize();
+    initAuth();
 
+    // Listener Global de Eventos de Autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
-        const currentUser = currentSession?.user ?? null;
+      async (event, currentSession) => {
+        console.log(`[Auth] Evento detectado: ${event}`);
         
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          const currentUser = currentSession?.user ?? null;
           setSession(currentSession);
           setUser(currentUser);
           if (currentUser && profileLoadedRef.current !== currentUser.id) {
@@ -169,49 +183,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(null);
           setUserProfile(null);
           profileLoadedRef.current = null;
+          navigate('/login', { replace: true });
         }
       }
     );
 
-    const handleVisibilityChange = () => {
-      if (user) {
-        const isVisible = document.visibilityState === 'visible';
-        updateOnlineStatus(user.id, isVisible);
-        if (isVisible) startHeartbeat(user.id);
-        else stopHeartbeat();
-      }
-    };
-
-    const handleBeforeUnload = () => {
-      if (user) {
-        // Tenta marcar como offline antes de fechar
-        const blob = new Blob([JSON.stringify({ is_online: false, last_seen: new Date().toISOString() })], { type: 'application/json' });
-        // Nota: Supabase não suporta beacon diretamente, mas o evento ajuda a disparar a última promise
-        updateOnlineStatus(user.id, false);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
     return () => {
       subscription.unsubscribe();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       stopHeartbeat();
     };
-  }, [fetchUserProfile, updateOnlineStatus, startHeartbeat, stopHeartbeat, user]);
+  }, [fetchUserProfile, stopHeartbeat, navigate]);
 
-  const signOut = async () => {
-    if (user) await updateOnlineStatus(user.id, false);
-    stopHeartbeat();
-    await supabase.auth.signOut();
+  const hasPermission = (permission: string) => {
+    if (user?.email === CHIEF_ADMIN_EMAIL) return true;
+    if (!userProfile || !userProfile.permissions) return false;
+    return !!userProfile.permissions[permission];
   };
 
   const refreshProfile = async () => {
     if (user) {
       profileLoadedRef.current = null;
-      fetchUserProfile(user.id, user);
+      await fetchUserProfile(user.id, user);
     }
   };
 

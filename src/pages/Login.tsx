@@ -44,17 +44,10 @@ const Login = () => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      // 1. Detectar plataforma
       const isNative = Capacitor.isNativePlatform();
-      
-      // 2. Definir URL de retorno dinâmica
-      // No App: usa o esquema customizado
-      // Na Web: usa a URL do site + rota de callback
       const redirectTo = isNative 
         ? 'socialapp://auth' 
         : `${window.location.origin}/auth/callback`;
-
-      console.log(`[Auth] Iniciando login Google. Plataforma: ${isNative ? 'Nativa' : 'Web'}. Redirect: ${redirectTo}`);
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -62,15 +55,12 @@ const Login = () => {
           redirectTo,
           queryParams: {
             access_type: 'offline',
-            prompt: 'select_account',
+            prompt: 'select_account', // FORÇA o Google a pedir para escolher a conta
           },
         }
       });
 
       if (error) throw error;
-      
-      // Na Web, o navegador será redirecionado automaticamente.
-      // No App, o Capacitor abrirá o navegador do sistema.
     } catch (error: any) {
       showError('Erro ao iniciar login com Google');
       setLoading(false);
