@@ -36,7 +36,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .maybeSingle();
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('[Auth] Erro ao buscar perfil:', profileError.message);
+      }
 
       // 2. Buscar cargos vinculados ao usuário
       const { data: userRoles, error: rolesError } = await supabase
@@ -44,13 +46,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .select('roles(name)')
         .eq('user_id', userId);
 
-      if (rolesError) throw rolesError;
+      if (rolesError) {
+        console.error('[Auth] Erro ao buscar roles:', rolesError.message);
+      }
 
-      const rolesList = userRoles?.map((ur: any) => ur.roles.name) || [];
+      const rolesList = userRoles?.map((ur: any) => ur.roles?.name).filter(Boolean) || [];
       setRoles(rolesList);
 
       if (profile) {
-        // 3. Buscar permissões baseadas nos cargos para controle granular
+        // 3. Buscar permissões baseadas nos cargos
         const { data: roleData } = await supabase
           .from('roles')
           .select('permissions')
@@ -66,7 +70,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserProfile(null);
       }
     } catch (err) {
-      console.error('[Auth] Erro ao carregar perfil:', err);
+      console.error('[Auth] Erro crítico em fetchUserProfile:', err);
+      // Não relançamos o erro para não travar o fluxo de autenticação
       setUserProfile(null);
       setRoles([]);
     }
@@ -77,9 +82,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initialize = async () => {
       try {
-        // Recupera a sessão inicial do armazenamento local
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
         
+        if (sessionError) throw sessionError;
+
         if (mounted) {
           if (initialSession) {
             setSession(initialSession);
@@ -88,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } catch (error) {
-        console.error('[Auth] Erro na inicialização:', error);
+        console.error('[Auth] Erro na inicialização da sessão:', error);
       } finally {
         if (mounted) {
           setLoading(false);
@@ -98,23 +104,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initialize();
 
-    // Escuta mudanças de estado em tempo real (Login, Logout, Refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         console.log(`[Auth] Evento detectado: ${event}`);
         
+        // Se o evento for de login ou refresh, garantimos que o loading seja tratado
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          setSession(currentSession);
-          setUser(currentSession?.user ?? null);
-          if (currentSession?.user) {
-            await fetchUserProfile(currentSession.user.id);
+          try {
+            setSession(currentSession);
+            setUser(currentSession?.user ?? null);
+            
+            if (currentSession?.user) {
+              await fetchUserProfile(currentSession.user.id);
+            }
+          } catch (error) {
+            console.error('[Auth] Erro ao processar mudança de estado:', error);
+          } finally {
+            setLoading(false);
           }
-          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
           setUserProfile(null);
           setRoles([]);
+          setLoading(false);
+        } else if (event === 'INITIAL_SESSION') {
+          // O initialize já cuida disso, mas garantimos o loading false aqui também
           setLoading(false);
         }
       }
@@ -127,8 +142,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchUserProfile]);
 
   const signOut = async () => {
-    setLoading(true);
-    await supabase.auth.signOut();
+    try {
+      setLoading(true);
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('[Auth] Erro ao sair:', error);
+      setLoading(false);
+    }
   };
 
   const refreshProfile = async () => {
