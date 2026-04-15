@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.ciep165.app-mergeDebugResources-26:/values-v27/values-v27.xml",
+            "outputFile": "com.ciep165.app-mergeDebugResources-24:/values-v27/values-v27.xml",
             "map": [
                 {
                     "source": "C:\\Users\\Lenovo\\.gradle\\caches\\9.0.0\\transforms\\a500ef2d61fed3c19dec1055242d817d\\transformed\\jetified-core-splashscreen-1.0.1\\res\\values-v27\\values-v27.xml",

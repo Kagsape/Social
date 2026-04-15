@@ -5,6 +5,13 @@ configurations.all {
         force "androidx.core:core:1.12.0"
         force "androidx.core:core-ktx:1.12.0"
         force "androidx.activity:activity:1.7.2"
+        
+        // Resolve conflitos de classes duplicadas do Kotlin (stdlib-jdk7/jdk8)
+        eachDependency { DependencyResolveDetails details ->
+            if (details.requested.group == 'org.jetbrains.kotlin') {
+                details.useVersion rootProject.ext.kotlinVersion
+            }
+        }
     }
 }
 
@@ -45,7 +52,16 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$rootProject.ext.androidxAppCompatVersion"
     implementation "androidx.core:core:$rootProject.ext.androidxCoreVersion"
     implementation "androidx.activity:activity:$rootProject.ext.androidxActivityVersion"
-    // O projeto :capacitor-android é adicionado via capacitor.build.gradle
+    
+    // Força a unificação da stdlib para evitar Duplicate Class
+    constraints {
+        implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7:${rootProject.ext.kotlinVersion}") {
+            because("kotlin-stdlib-jdk7 is now part of kotlin-stdlib")
+        }
+        implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${rootProject.ext.kotlinVersion}") {
+            because("kotlin-stdlib-jdk8 is now part of kotlin-stdlib")
+        }
+    }
 }
 
 apply from: 'capacitor.build.gradle'
