@@ -1,10 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
-import { showError } from '@/utils/toast';
 
 interface AuthContextType {
   session: Session | null;
@@ -28,82 +26,109 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   const fetchUserProfile = useCallback(async (userId: string) => {
     try {
       // 1. Buscar perfil básico
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
 
-      // 2. Buscar múltiplos cargos do usuário
-      const { data: userRoles } = await supabase
+      if (profileError) throw profileError;
+
+      // 2. Buscar cargos do usuário
+      const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select('roles(name)')
         .eq('user_id', userId);
+
+      if (rolesError) throw rolesError;
 
       const rolesList = userRoles?.map((ur: any) => ur.roles.name) || [];
       setRoles(rolesList);
 
       if (profile) {
-        // Buscar permissões baseadas no cargo principal ou combinadas
+        // 3. Buscar permissões baseadas nos cargos
         const { data: roleData } = await supabase
           .from('roles')
           .select('permissions')
           .in('name', rolesList);
         
-        // Mesclar todas as permissões dos cargos que o usuário possui
         const mergedPermissions = roleData?.reduce((acc, curr) => ({
           ...acc,
           ...(curr.permissions || {})
         }), {}) || {};
 
         setUserProfile({ ...profile, permissions: mergedPermissions });
+      } else {
+        setUserProfile(null);
       }
     } catch (err) {
-      console.error('[Auth] Erro ao carregar perfil e cargos:', err);
+      console.error('[Auth] Erro ao carregar perfil:', err);
+      setUserProfile(null);
+      setRoles([]);
     }
   }, []);
 
   useEffect(() => {
-    const initAuth = async () => {
-      const { data: { session: initialSession } } = await supabase.auth.getSession();
-      if (initialSession) {
-        setSession(initialSession);
-        setUser(initialSession.user);
-        await fetchUserProfile(initialSession.user.id);
+    let mounted = true;
+
+    const initialize = async () => {
+      try {
+        // Pega a sessão inicial
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        
+        if (mounted) {
+          if (initialSession) {
+            setSession(initialSession);
+            setUser(initialSession.user);
+            await fetchUserProfile(initialSession.user.id);
+          }
+        }
+      } catch (error) {
+        console.error('[Auth] Erro na inicialização:', error);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
     };
 
-    initAuth();
+    initialize();
 
+    // Escuta mudanças de estado (Login, Logout, Token Refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        console.log(`[Auth] Evento: ${event}`);
+        
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
           if (currentSession?.user) {
             await fetchUserProfile(currentSession.user.id);
           }
+          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
           setUserProfile(null);
           setRoles([]);
+          setLoading(false);
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [fetchUserProfile]);
 
   const signOut = async () => {
+    setLoading(true);
     await supabase.auth.signOut();
-    navigate('/login');
   };
 
   const refreshProfile = async () => {
@@ -131,13 +156,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading ? children : (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <p className="text-muted-foreground animate-pulse font-medium">Carregando portal...</p>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
+  if (context === undefined) throw new Error('useAuth deve ser usado dentro de um AuthProvider');
   return context;
 };
