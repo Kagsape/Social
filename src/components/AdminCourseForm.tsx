@@ -53,11 +53,11 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
           name: '', 
           code: '', 
           description: '', 
-          teacher_id: isAdmin ? '' : (user?.id || '') 
+          teacher_id: user?.id || '' 
         });
       }
     }
-  }, [isDialogOpen, courseId, isAdmin, user?.id]);
+  }, [isDialogOpen, courseId, user?.id]);
 
   const fetchTeachers = async () => {
     try {
@@ -88,7 +88,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
           name: data.name,
           code: data.code,
           description: data.description || '',
-          teacher_id: data.teacher_id || ''
+          teacher_id: data.teacher_id || data.created_by || ''
         });
       }
     } catch (error) {
@@ -119,7 +119,10 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
       } else {
         const { error } = await supabase
           .from('courses')
-          .insert(courseData);
+          .insert({
+            ...courseData,
+            created_by: user?.id
+          });
         if (error) throw error;
         showSuccess('Curso criado com sucesso!');
       }
@@ -148,7 +151,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
             <DialogTitle>{courseId ? 'Editar Curso' : 'Criar Novo Curso'}</DialogTitle>
             <DialogDescription>
               {courseId 
-                ? 'Atualize as informações do curso. Administradores podem editar qualquer curso.'
+                ? 'Atualize as informações do curso. Administradores podem reatribuir o professor.'
                 : 'Preencha as informações para criar um novo curso.'}
             </DialogDescription>
           </DialogHeader>
@@ -160,7 +163,6 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
                 value={formData.name}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
                 required
-                placeholder="Ex: Introdução ao React"
               />
             </div>
             <div className="space-y-2">
@@ -170,7 +172,6 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
                 value={formData.code}
                 onChange={(e) => setFormData({...formData, code: e.target.value})}
                 required
-                placeholder="Ex: REACT-101"
               />
             </div>
             <div className="space-y-2">
@@ -180,7 +181,6 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
                 value={formData.description}
                 onChange={(e) => setFormData({...formData, description: e.target.value})}
                 rows={3}
-                placeholder="Descreva o que os alunos aprenderão..."
               />
             </div>
             
@@ -202,7 +202,6 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] text-muted-foreground">Como administrador, você pode alterar o responsável pelo curso.</p>
               </div>
             )}
           </div>

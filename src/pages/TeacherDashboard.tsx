@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Users, Monitor, GraduationCap, UserCheck, ChevronRight, Loader2, Plus, X, Edit3, Settings } from 'lucide-react';
+import { BookOpen, Users, Monitor, GraduationCap, UserCheck, ChevronRight, Loader2, Plus, X, Settings } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { Link, useNavigate } from 'react-router-dom';
@@ -13,14 +13,13 @@ import AttendanceForm from '@/components/AttendanceForm';
 import GradeForm from '@/components/GradeForm';
 import ComputerReservationForm from '@/components/ComputerReservationForm';
 import CreateCourseForm from '@/components/CreateCourseForm';
-import EditCourseForm from '@/components/EditCourseForm';
+import AdminCourseForm from '@/components/AdminCourseForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { showError } from '@/utils/toast';
+import { cn } from "@/lib/utils";
 
 const TeacherDashboard = () => {
-  const { user, userProfile } = useAuth();
-  const navigate = useNavigate();
+  const { user, isAdmin } = useAuth();
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalStudents: 0,
@@ -31,36 +30,31 @@ const TeacherDashboard = () => {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [showEditForm, setShowEditForm] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchTeacherData();
     }
-  }, [user]);
+  }, [user, isAdmin]);
 
   useEffect(() => {
     if (selectedCourse && selectedCourse !== 'none') {
       fetchCourseStudents(selectedCourse);
-      setShowEditForm(false); // Resetar form de edição ao trocar curso
     }
   }, [selectedCourse]);
 
   const fetchTeacherData = async () => {
     setLoading(true);
     try {
-      // Buscar cursos onde o professor é criador OU está vinculado
-      const { data: linkedCourses } = await supabase
-        .from('course_teachers')
-        .select('course_id')
-        .eq('teacher_id', user?.id);
+      // Se for admin, busca todos. Se for professor, busca onde ele é o teacher_id ou created_by
+      let query = supabase.from('courses').select('*');
       
-      const courseIds = (linkedCourses || []).map(lc => lc.course_id);
+      if (!isAdmin) {
+        query = query.or(`teacher_id.eq.${user?.id},created_by.eq.${user?.id}`);
+      }
 
-      const { data: teacherCourses } = await supabase
-        .from('courses')
-        .select('*')
-        .or(`created_by.eq.${user?.id},id.in.(${courseIds.length > 0 ? courseIds.join(',') : '00000000-0000-0000-0000-000000000000'})`);
+      const { data: teacherCourses, error } = await query.order('name');
+      if (error) throw error;
 
       setCourses(teacherCourses || []);
       if (teacherCourses && teacherCourses.length > 0 && !selectedCourse) {
@@ -84,7 +78,7 @@ const TeacherDashboard = () => {
         activeReservations: reservations?.length || 0
       });
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching teacher data:', error);
     } finally {
       setLoading(false);
     }
@@ -102,7 +96,7 @@ const TeacherDashboard = () => {
 
       setStudents(enrollments?.map(e => e.users) || []);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching students:', error);
     }
   };
 
@@ -119,7 +113,7 @@ const TeacherDashboard = () => {
           <div className="flex flex-wrap items-center gap-2">
             <Button 
               variant={showCreateForm ? "outline" : "default"} 
-              onClick={() => { setShowCreateForm(!showCreateForm); setShowEditForm(false); }}
+              onClick={() => setShowCreateForm(!showCreateForm)}
               className="gap-2 rounded-xl"
             >
               {showCreateForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -138,15 +132,7 @@ const TeacherDashboard = () => {
             </select>
 
             {selectedCourse && selectedCourse !== 'none' && (
-              <Button 
-                variant="outline" 
-                size="icon" 
-                className="rounded-xl h-10 w-10"
-                onClick={() => { setShowEditForm(!showEditForm); setShowCreateForm(false); }}
-                title="Configurações do Curso"
-              >
-                <Settings className={cn("h-4 w-4", showEditForm && "text-primary")} />
-              </Button>
+              <AdminCourseForm courseId={selectedCourse} onCourseSaved={fetchTeacherData} />
             )}
           </div>
         </div>
@@ -154,12 +140,6 @@ const TeacherDashboard = () => {
         {showCreateForm && (
           <div className="animate-in fade-in slide-in-from-top-4 duration-300">
             <CreateCourseForm onSuccess={() => { setShowCreateForm(false); fetchTeacherData(); }} />
-          </div>
-        )}
-
-        {showEditForm && selectedCourse && (
-          <div className="animate-in fade-in slide-in-from-top-4 duration-300">
-            <EditCourseForm courseId={selectedCourse} onSuccess={() => { setShowEditForm(false); fetchTeacherData(); }} />
           </div>
         )}
 
