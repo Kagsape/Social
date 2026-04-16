@@ -29,23 +29,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = useCallback(async (userId: string, authUser?: User) => {
     try {
-      // 1. Buscar perfil básico na tabela "users"
       let { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
 
-      // Fallback para criação automática se o perfil não existir
+      // Criação automática do perfil na tabela 'users' se não existir
       if (!profile && authUser) {
+        const metadata = authUser.user_metadata;
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
             id: userId,
-            name: authUser.user_metadata?.name || authUser.email?.split('@')[0],
+            name: metadata?.name || authUser.email?.split('@')[0],
             email: authUser.email,
-            role: authUser.user_metadata?.role || 'student',
-            avatar_url: authUser.user_metadata?.avatar_url
+            role: metadata?.role || 'student',
+            student_id: metadata?.student_id || null,
+            teacher_id: metadata?.teacher_id || null,
+            avatar_url: metadata?.avatar_url
           })
           .select()
           .single();
@@ -53,7 +55,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!insertError) profile = newProfile;
       }
 
-      // 2. Buscar cargos (RBAC) - Silencioso se a tabela não existir
       let rolesList: string[] = [];
       const { data: userRolesData } = await supabase
         .from('user_roles')
@@ -70,7 +71,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         rolesList = rolesData?.map(r => r.name) || [];
       }
 
-      // Adiciona o cargo da coluna 'role' se não estiver na lista
       if (profile?.role && !rolesList.includes(profile.role)) {
         rolesList.push(profile.role);
       }
@@ -78,20 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setRoles(rolesList);
 
       if (profile) {
-        let mergedPermissions = {};
-        if (rolesList.length > 0) {
-          const { data: permissionsData } = await supabase
-            .from('roles')
-            .select('permissions')
-            .in('name', rolesList);
-          
-          mergedPermissions = permissionsData?.reduce((acc, curr) => ({
-            ...acc,
-            ...(curr.permissions || {})
-          }), {}) || {};
-        }
-
-        setUserProfile({ ...profile, permissions: mergedPermissions });
+        setUserProfile({ ...profile });
       }
     } catch (err) {
       console.error('[Auth:Profile] Erro ao carregar perfil:', err);
