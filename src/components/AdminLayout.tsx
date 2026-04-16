@@ -13,7 +13,8 @@ import {
   History,
   ChevronRight,
   LogOut,
-  UserCheck
+  UserCheck,
+  Package
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   const menuItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Cursos', path: '/admin/courses', icon: BookOpen },
-    { name: 'Laboratório', path: '/admin/lab', icon: Monitor },
+    { name: 'Recursos Físicos', path: '/inventory', icon: Package },
     { name: 'Reservas', path: '/admin/reservations', icon: Calendar },
     { name: 'Usuários', path: '/admin/users', icon: Users },
     { name: 'Lista Branca', path: '/admin/whitelist', icon: UserCheck },
@@ -96,7 +97,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-0">
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             {children}
           </div>

@@ -18,7 +18,6 @@ import UserProfile from "./pages/UserProfile";
 import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
-import LabManagement from "./pages/LabManagement";
 import AdminCoursesPage from "./pages/AdminCoursesPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import AdminRolesPage from "./pages/AdminRolesPage";
@@ -73,12 +72,11 @@ const App = () => (
             <Route path="/courses/:id/lessons" element={<ProtectedRoute><CourseLessonsPage /></ProtectedRoute>} />
             <Route path="/student-file/:studentId" element={<ProtectedRoute allowedRoles={['teacher', 'admin']}><StudentFilePage /></ProtectedRoute>} />
             
-            {/* Rota de Inventário aberta para todos os cargos autenticados */}
-            <Route path="/inventory" element={<ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}><Inventory /></ProtectedRoute>} />
+            {/* Rota Unificada de Recursos Físicos */}
+            <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
 
             <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/courses" element={<ProtectedRoute allowedRoles={['admin']}><AdminCoursesPage /></ProtectedRoute>} />
-            <Route path="/admin/lab" element={<ProtectedRoute allowedRoles={['admin']}><LabManagement /></ProtectedRoute>} />
             <Route path="/admin/reservations" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ReservationsPage /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><AdminUsersPage /></ProtectedRoute>} />
             <Route path="/admin/roles" element={<ProtectedRoute allowedRoles={['admin']}><AdminRolesPage /></ProtectedRoute>} />
