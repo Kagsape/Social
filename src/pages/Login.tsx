@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Hash, Lock, Loader2, ArrowLeft, Chrome, AlertCircle } from 'lucide-react';
+import { Hash, Lock, Loader2, ArrowLeft, Chrome, AlertCircle, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import { Separator } from '@/components/ui/separator';
@@ -21,6 +21,14 @@ const Login = () => {
 
   const from = (location.state as any)?.from?.pathname || '/feed';
 
+  // Função auxiliar para evitar que o Supabase trave a UI para sempre
+  const withTimeout = async (promise: Promise<any>, timeoutMs: number = 8000) => {
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Tempo de resposta do servidor esgotado (Timeout)")), timeoutMs)
+    );
+    return Promise.race([promise, timeoutPromise]);
+  };
+
   const handleGoogleLogin = async () => {
     console.log('[LOGIN_DEBUG] 🌐 Iniciando Login com Google...');
     try {
@@ -30,13 +38,10 @@ const Login = () => {
           redirectTo: `${window.location.origin}/auth/callback`
         }
       });
-      if (error) {
-        console.error('[LOGIN_DEBUG] ❌ Erro Google OAuth:', error.message);
-        showError('Erro ao conectar com Google: ' + error.message);
-      }
+      if (error) throw error;
     } catch (error: any) {
-      console.error('[LOGIN_DEBUG] 💥 Erro crítico Google:', error);
-      showError('Erro inesperado no login social.');
+      console.error('[LOGIN_DEBUG] ❌ Erro Google:', error.message);
+      showError('Erro ao conectar com Google.');
     }
   };
 
@@ -47,71 +52,69 @@ const Login = () => {
     setLoading(true);
     setErrorDetail(null);
     const cleanId = registrationId.trim();
-    const timestamp = new Date().toLocaleTimeString();
+    const timestamp = () => new Date().toLocaleTimeString();
 
-    console.log(`[${timestamp}] [LOGIN_DEBUG] 🏁 Tentativa com Matrícula:`, cleanId);
+    console.log(`[${timestamp()}] [LOGIN_DEBUG] 🏁 Início da tentativa para ID:`, cleanId);
 
     try {
-      // 1. Buscar e-mail
-      console.log(`[${timestamp}] [LOGIN_DEBUG] 1️⃣ Consultando tabela 'users'...`);
-      const { data: userData, error: userQueryError } = await supabase
-        .from('users')
-        .select('email')
-        .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
-        .maybeSingle();
-
-      if (userQueryError) {
-        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro na tabela 'users':`, userQueryError.message, userQueryError.code);
-        // Se der erro aqui, não paramos, tentamos o padrão
-      } else {
-        console.log(`[${timestamp}] [LOGIN_DEBUG] ✅ Resultado 'users':`, userData ? 'E-mail encontrado' : 'Nenhum usuário prévio');
+      // 1. Buscar e-mail (com timeout)
+      console.log(`[${timestamp()}] [LOGIN_DEBUG] 1️⃣ Consultando tabela 'users'...`);
+      let userData = null;
+      try {
+        const response = await withTimeout(
+          supabase
+            .from('users')
+            .select('email')
+            .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
+            .maybeSingle()
+        );
+        userData = response.data;
+        console.log(`[${timestamp()}] [LOGIN_DEBUG] ✅ Resposta da tabela 'users' recebida.`);
+      } catch (err: any) {
+        console.warn(`[${timestamp()}] [LOGIN_DEBUG] ⚠️ Falha ou Timeout na consulta 'users':`, err.message);
+        // Não travamos aqui, seguimos para o e-mail padrão
       }
 
       const targetEmail = userData?.email || `${cleanId}@app.local`;
+      console.log(`[${timestamp()}] [LOGIN_DEBUG] 📧 E-mail definido:`, targetEmail);
 
       // 2. Tentar Login Direto
-      console.log(`[${timestamp}] [LOGIN_DEBUG] 2️⃣ Tentando signInWithPassword para:`, targetEmail);
+      console.log(`[${timestamp()}] [LOGIN_DEBUG] 2️⃣ Tentando autenticação...`);
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: password,
       });
 
       if (!signInError && signInData.session) {
-        console.log(`[${timestamp}] [LOGIN_DEBUG] 🎉 Login OK!`);
+        console.log(`[${timestamp()}] [LOGIN_DEBUG] 🎉 Login realizado com sucesso!`);
         showSuccess('Bem-vindo de volta!');
         navigate(from, { replace: true });
         return;
       }
 
-      if (signInError) {
-        console.warn(`[${timestamp}] [LOGIN_DEBUG] ⚠️ Falha no login direto:`, signInError.message);
-      }
+      console.log(`[${timestamp()}] [LOGIN_DEBUG] ℹ️ Login direto falhou, verificando lista branca...`);
 
-      // 3. Verificar Whitelist
-      console.log(`[${timestamp}] [LOGIN_DEBUG] 3️⃣ Consultando 'registration_whitelist'...`);
-      const { data: whitelistEntry, error: whitelistError } = await supabase
-        .from('registration_whitelist')
-        .select('*')
-        .eq('registration_id', cleanId)
-        .maybeSingle();
+      // 3. Verificar Whitelist (com timeout)
+      const { data: whitelistEntry, error: whitelistError } = await withTimeout(
+        supabase
+          .from('registration_whitelist')
+          .select('*')
+          .eq('registration_id', cleanId)
+          .maybeSingle()
+      );
 
-      if (whitelistError) {
-        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro na 'registration_whitelist':`, whitelistError.message);
-        throw new Error(`Erro de banco: ${whitelistError.message}. Verifique se a tabela existe.`);
-      }
+      if (whitelistError) throw new Error(`Erro no banco: ${whitelistError.message}`);
       
       if (!whitelistEntry) {
-        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ ID não autorizado.`);
-        throw new Error('Esta matrícula não está na lista de autorizados.');
+        throw new Error('Esta matrícula não está autorizada no sistema.');
       }
 
       if (password !== whitelistEntry.password) {
-        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Senha incorreta.`);
         throw new Error('Senha incorreta para esta matrícula.');
       }
 
       // 4. Criar conta
-      console.log(`[${timestamp}] [LOGIN_DEBUG] 4️⃣ Criando conta nova...`);
+      console.log(`[${timestamp()}] [LOGIN_DEBUG] 4️⃣ Criando nova conta...`);
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: targetEmail,
         password: password,
@@ -124,10 +127,7 @@ const Login = () => {
         }
       });
 
-      if (signUpError) {
-        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro no signUp:`, signUpError.message);
-        throw signUpError;
-      }
+      if (signUpError) throw signUpError;
       
       if (signUpData.session) {
         showSuccess('Conta ativada com sucesso!');
@@ -137,7 +137,7 @@ const Login = () => {
         setLoading(false);
       }
     } catch (error: any) {
-      console.error(`[${timestamp}] [LOGIN_DEBUG] 🚨 Erro Final:`, error.message);
+      console.error(`[${timestamp()}] [LOGIN_DEBUG] 🚨 Erro Crítico:`, error.message);
       setErrorDetail(error.message);
       showError(error.message);
       setLoading(false);
@@ -164,8 +164,13 @@ const Login = () => {
               <div className="bg-destructive/10 p-4 rounded-xl flex items-start gap-3 text-destructive text-sm animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-bold">Erro detectado:</p>
+                  <p className="font-bold">Não foi possível entrar:</p>
                   <p className="text-xs opacity-80">{errorDetail}</p>
+                  {errorDetail.includes("Timeout") && (
+                    <p className="text-[10px] mt-2 flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> Tente recarregar a página ou verifique sua conexão.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
