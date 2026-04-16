@@ -21,6 +21,25 @@ const Login = () => {
 
   const from = (location.state as any)?.from?.pathname || '/feed';
 
+  const handleGoogleLogin = async () => {
+    console.log('[LOGIN_DEBUG] 🌐 Iniciando Login com Google...');
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+      if (error) {
+        console.error('[LOGIN_DEBUG] ❌ Erro Google OAuth:', error.message);
+        showError('Erro ao conectar com Google: ' + error.message);
+      }
+    } catch (error: any) {
+      console.error('[LOGIN_DEBUG] 💥 Erro crítico Google:', error);
+      showError('Erro inesperado no login social.');
+    }
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!registrationId.trim() || !password.trim()) return;
@@ -30,42 +49,46 @@ const Login = () => {
     const cleanId = registrationId.trim();
     const timestamp = new Date().toLocaleTimeString();
 
-    console.log(`[${timestamp}] [LOGIN_DEBUG] 🏁 Iniciando tentativa de login para ID:`, cleanId);
+    console.log(`[${timestamp}] [LOGIN_DEBUG] 🏁 Tentativa com Matrícula:`, cleanId);
 
     try {
-      // 1. Verificar se já existe um e-mail para este ID
-      console.log(`[${timestamp}] [LOGIN_DEBUG] 1️⃣ Buscando e-mail na tabela 'users'...`);
+      // 1. Buscar e-mail
+      console.log(`[${timestamp}] [LOGIN_DEBUG] 1️⃣ Consultando tabela 'users'...`);
       const { data: userData, error: userQueryError } = await supabase
         .from('users')
         .select('email')
         .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
         .maybeSingle();
 
-      if (userQueryError) console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro na busca de usuário:`, userQueryError);
+      if (userQueryError) {
+        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro na tabela 'users':`, userQueryError.message, userQueryError.code);
+        // Se der erro aqui, não paramos, tentamos o padrão
+      } else {
+        console.log(`[${timestamp}] [LOGIN_DEBUG] ✅ Resultado 'users':`, userData ? 'E-mail encontrado' : 'Nenhum usuário prévio');
+      }
 
       const targetEmail = userData?.email || `${cleanId}@app.local`;
-      console.log(`[${timestamp}] [LOGIN_DEBUG] 📧 E-mail alvo definido como:`, targetEmail);
 
-      // 2. Tentar Login
-      console.log(`[${timestamp}] [LOGIN_DEBUG] 2️⃣ Tentando autenticação com Supabase Auth...`);
+      // 2. Tentar Login Direto
+      console.log(`[${timestamp}] [LOGIN_DEBUG] 2️⃣ Tentando signInWithPassword para:`, targetEmail);
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: password,
       });
 
       if (!signInError && signInData.session) {
-        console.log(`[${timestamp}] [LOGIN_DEBUG] ✅ Login bem-sucedido! Redirecionando para:`, from);
+        console.log(`[${timestamp}] [LOGIN_DEBUG] 🎉 Login OK!`);
         showSuccess('Bem-vindo de volta!');
         navigate(from, { replace: true });
         return;
       }
 
       if (signInError) {
-        console.warn(`[${timestamp}] [LOGIN_DEBUG] ⚠️ Falha no login direto (pode ser primeiro acesso):`, signInError.message);
+        console.warn(`[${timestamp}] [LOGIN_DEBUG] ⚠️ Falha no login direto:`, signInError.message);
       }
 
       // 3. Verificar Whitelist
-      console.log(`[${timestamp}] [LOGIN_DEBUG] 3️⃣ Verificando ID na 'registration_whitelist'...`);
+      console.log(`[${timestamp}] [LOGIN_DEBUG] 3️⃣ Consultando 'registration_whitelist'...`);
       const { data: whitelistEntry, error: whitelistError } = await supabase
         .from('registration_whitelist')
         .select('*')
@@ -73,24 +96,22 @@ const Login = () => {
         .maybeSingle();
 
       if (whitelistError) {
-        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro ao consultar whitelist:`, whitelistError);
-        throw new Error(`Erro no banco de dados: ${whitelistError.message}`);
+        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro na 'registration_whitelist':`, whitelistError.message);
+        throw new Error(`Erro de banco: ${whitelistError.message}. Verifique se a tabela existe.`);
       }
       
       if (!whitelistEntry) {
-        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ ID não encontrado na whitelist.`);
-        throw new Error('Esta matrícula não está autorizada no sistema.');
+        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ ID não autorizado.`);
+        throw new Error('Esta matrícula não está na lista de autorizados.');
       }
 
-      console.log(`[${timestamp}] [LOGIN_DEBUG] 📄 Entrada na whitelist encontrada:`, whitelistEntry);
-
       if (password !== whitelistEntry.password) {
-        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Senha incorreta. Esperada: ${whitelistEntry.password}, Recebida: ${password}`);
+        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Senha incorreta.`);
         throw new Error('Senha incorreta para esta matrícula.');
       }
 
-      // 4. Primeiro acesso: Criar conta
-      console.log(`[${timestamp}] [LOGIN_DEBUG] 4️⃣ Criando nova conta (Primeiro Acesso)...`);
+      // 4. Criar conta
+      console.log(`[${timestamp}] [LOGIN_DEBUG] 4️⃣ Criando conta nova...`);
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: targetEmail,
         password: password,
@@ -104,21 +125,19 @@ const Login = () => {
       });
 
       if (signUpError) {
-        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro no signUp:`, signUpError);
+        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro no signUp:`, signUpError.message);
         throw signUpError;
       }
       
       if (signUpData.session) {
-        console.log(`[${timestamp}] [LOGIN_DEBUG] ✅ Conta criada e logada com sucesso!`);
         showSuccess('Conta ativada com sucesso!');
         navigate(from, { replace: true });
       } else {
-        console.log(`[${timestamp}] [LOGIN_DEBUG] ℹ️ Conta criada, mas aguardando confirmação ou re-login.`);
         showSuccess('Conta criada! Tente entrar novamente.');
         setLoading(false);
       }
     } catch (error: any) {
-      console.error(`[${timestamp}] [LOGIN_DEBUG] 🚨 Erro final capturado:`, error);
+      console.error(`[${timestamp}] [LOGIN_DEBUG] 🚨 Erro Final:`, error.message);
       setErrorDetail(error.message);
       showError(error.message);
       setLoading(false);
@@ -138,19 +157,35 @@ const Login = () => {
         <Card className="border-none shadow-xl">
           <CardHeader>
             <CardTitle>Entrar</CardTitle>
-            <CardDescription>Use sua matrícula e senha autorizada.</CardDescription>
+            <CardDescription>Use sua matrícula ou sua conta Google.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {errorDetail && (
               <div className="bg-destructive/10 p-4 rounded-xl flex items-start gap-3 text-destructive text-sm animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-bold">Erro no Login:</p>
+                  <p className="font-bold">Erro detectado:</p>
                   <p className="text-xs opacity-80">{errorDetail}</p>
-                  <p className="text-[10px] mt-2 italic">Dica: Abra o console (F12) para ver os logs detalhados.</p>
                 </div>
               </div>
             )}
+
+            <Button 
+              variant="outline" 
+              className="w-full h-12 rounded-xl gap-3 font-bold border-2 hover:bg-slate-50" 
+              onClick={handleGoogleLogin}
+              disabled={loading}
+            >
+              <Chrome className="h-5 w-5 text-red-500" />
+              Entrar com Google
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center"><Separator /></div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Ou via matrícula</span>
+              </div>
+            </div>
 
             <form onSubmit={handleAuth} className="space-y-4">
               <div className="space-y-2">
