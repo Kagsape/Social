@@ -27,8 +27,6 @@ const CompleteProfile = () => {
 
   useEffect(() => {
     const isChiefAdmin = user?.email === 'xakatosh66@gmail.com';
-    
-    // Se for o admin mestre ou já tiver matrícula, vai direto para o feed
     if (isChiefAdmin || (userProfile && (userProfile.student_id || userProfile.teacher_id))) {
       navigate('/feed');
     }
@@ -48,7 +46,10 @@ const CompleteProfile = () => {
         .eq('registration_id', cleanId)
         .maybeSingle();
 
-      if (whitelistError) throw new Error('Erro ao conectar com o servidor.');
+      if (whitelistError) {
+        console.error('Erro Whitelist:', whitelistError);
+        throw new Error('Erro ao validar matrícula. Verifique as políticas de segurança do banco.');
+      }
 
       if (!whitelistEntry) {
         throw new Error(`O ID "${cleanId}" não está na lista de autorizados.`);
@@ -60,16 +61,7 @@ const CompleteProfile = () => {
       }
 
       const idColumn = role === 'student' ? 'student_id' : 'teacher_id';
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq(idColumn, cleanId)
-        .maybeSingle();
-
-      if (existingUser) {
-        throw new Error('Este número de matrícula já está sendo usado por outra conta.');
-      }
-
+      
       const { error: updateError } = await supabase
         .from('users')
         .update({
@@ -88,12 +80,12 @@ const CompleteProfile = () => {
         }
       });
 
-      showSuccess('Cadastro concluído com sucesso!');
+      showSuccess('Cadastro concluído!');
       await refreshProfile();
       navigate('/feed');
       
     } catch (error: any) {
-      showError(error.message);
+      showError(error.message || 'Erro ao concluir cadastro.');
     } finally {
       setLoading(false);
     }
@@ -110,13 +102,13 @@ const CompleteProfile = () => {
           </div>
           <CardTitle className="text-2xl">Conclua seu Cadastro</CardTitle>
           <CardDescription>
-            Detectamos que você entrou via Google. Para continuar, precisamos validar sua matrícula no CIEP 165.
+            Valide sua matrícula no CIEP 165 para acessar o portal.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleComplete} className="space-y-6">
             <div className="space-y-2">
-              <Label>Você é Aluno ou Professor?</Label>
+              <Label>Tipo de Conta</Label>
               <Select value={role} onValueChange={(v: any) => setRole(v)}>
                 <SelectTrigger className="rounded-xl">
                   <SelectValue />

@@ -26,11 +26,9 @@ const Signup = () => {
 
   const handleRegister = async (data: any) => {
     const cleanId = data.registration_id.trim();
-    const selectedRole = role; // Captura o estado atual do cargo selecionado
+    const selectedRole = role;
     
-    console.log('[Signup] Iniciando validação rígida...', { selectedRole, id: cleanId });
     setLoading(true);
-    
     try {
       // 1. Buscar o ID na Whitelist
       const { data: whitelistEntry, error: whitelistError } = await supabase
@@ -39,40 +37,28 @@ const Signup = () => {
         .eq('registration_id', cleanId)
         .maybeSingle();
 
-      if (whitelistError) throw new Error('Erro ao conectar com o banco de dados.');
-
-      // 2. Se não existir na lista, bloqueia na hora
-      if (!whitelistEntry) {
-        throw new Error(`O ID "${cleanId}" não foi encontrado na lista de autorizados.`);
+      if (whitelistError) {
+        console.error('Erro Whitelist:', whitelistError);
+        throw new Error('Erro ao validar matrícula. Verifique sua conexão ou se as políticas do banco foram configuradas.');
       }
 
-      // 3. TRAVA DE SEGURANÇA: O cargo selecionado DEVE ser igual ao cargo autorizado
-      // Se na lista está 'teacher' e o usuário escolheu 'student', o sistema bloqueia.
+      if (!whitelistEntry) {
+        throw new Error(`O ID "${cleanId}" não foi encontrado na lista de autorizados. Entre em contato com o administrador.`);
+      }
+
       if (whitelistEntry.role !== selectedRole) {
         const cargoAutorizado = whitelistEntry.role === 'student' ? 'ALUNO' : 'PROFESSOR';
-        throw new Error(`ACESSO NEGADO: Este ID está autorizado apenas para o cargo de ${cargoAutorizado}. Você tentou se cadastrar como ${selectedRole === 'student' ? 'ALUNO' : 'PROFESSOR'}.`);
+        throw new Error(`Este ID está autorizado apenas para o cargo de ${cargoAutorizado}.`);
       }
 
-      // 4. Verificar se o ID já está em uso
-      const idColumn = selectedRole === 'student' ? 'student_id' : 'teacher_id';
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq(idColumn, cleanId)
-        .maybeSingle();
-
-      if (existingUser) {
-        throw new Error('Este número de matrícula já foi cadastrado por outro usuário.');
-      }
-
-      // 5. Se passou em tudo, cria a conta com o cargo CORRETO da whitelist
+      // 2. Criar a conta no Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
           data: {
             name: data.name,
-            role: whitelistEntry.role, // Usa o cargo da whitelist por segurança
+            role: whitelistEntry.role,
             [whitelistEntry.role === 'student' ? 'student_id' : 'teacher_id']: cleanId
           }
         },
@@ -80,12 +66,11 @@ const Signup = () => {
 
       if (authError) throw authError;
 
-      showSuccess(`Conta de ${whitelistEntry.role === 'student' ? 'Aluno' : 'Professor'} criada com sucesso!`);
+      showSuccess('Conta criada! Verifique seu e-mail para confirmar o cadastro.');
       navigate('/login');
       
     } catch (error: any) {
-      console.error('[Signup] Erro de validação:', error.message);
-      showError(error.message);
+      showError(error.message || 'Erro desconhecido ao criar conta.');
     } finally {
       setLoading(false);
     }
@@ -115,9 +100,9 @@ const Signup = () => {
           <CardContent>
             <form onSubmit={handleSubmit(handleRegister)} className="space-y-5">
               <div className="space-y-2">
-                <Label>Tipo de Conta que deseja criar</Label>
+                <Label>Tipo de Conta</Label>
                 <Select value={role} onValueChange={(value: 'student' | 'teacher') => setRole(value)}>
-                  <SelectTrigger className="rounded-xl border-2 focus:ring-primary">
+                  <SelectTrigger className="rounded-xl">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -128,7 +113,7 @@ const Signup = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="registration_id">Número de Matrícula / ID Autorizado</Label>
+                <Label htmlFor="registration_id">Número de Matrícula / ID</Label>
                 <div className="relative">
                   <ShieldAlert className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
