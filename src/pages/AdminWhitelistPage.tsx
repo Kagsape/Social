@@ -15,7 +15,8 @@ import {
   GraduationCap, 
   User,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Lock
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
@@ -38,6 +39,7 @@ const AdminWhitelistPage = () => {
   // Form state
   const [newId, setNewId] = useState('');
   const [newName, setNewName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<'student' | 'teacher'>('student');
 
   const fetchWhitelist = async () => {
@@ -70,7 +72,10 @@ const AdminWhitelistPage = () => {
 
   const handleAddEntry = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newId.trim() || !newName.trim()) return;
+    if (!newId.trim() || !newName.trim() || !newPassword.trim()) {
+      showError('Preencha todos os campos, incluindo a senha.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -79,7 +84,8 @@ const AdminWhitelistPage = () => {
         .insert({
           registration_id: newId.trim(),
           name: newName.trim(),
-          role: newRole
+          role: newRole,
+          password: newPassword.trim()
         });
 
       if (error) throw error;
@@ -87,6 +93,7 @@ const AdminWhitelistPage = () => {
       showSuccess(`${newName} autorizado com sucesso.`);
       setNewId('');
       setNewName('');
+      setNewPassword('');
       fetchWhitelist();
     } catch (error: any) {
       showError(error.message || 'Erro ao adicionar à lista.');
@@ -139,7 +146,7 @@ const AdminWhitelistPage = () => {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Lista Branca de Matrículas</h1>
-          <p className="text-muted-foreground">Autorize alunos e professores a criarem contas no sistema.</p>
+          <p className="text-muted-foreground">Autorize alunos e professores definindo seus IDs e senhas iniciais.</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -171,6 +178,21 @@ const AdminWhitelistPage = () => {
                     placeholder="Nome completo" 
                     required 
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reg_pass">Senha Inicial</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      id="reg_pass" 
+                      type="text"
+                      value={newPassword} 
+                      onChange={(e) => setNewPassword(e.target.value)} 
+                      placeholder="Senha para o 1º acesso" 
+                      className="pl-10"
+                      required 
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Tipo de Acesso</Label>
@@ -226,6 +248,9 @@ const AdminWhitelistPage = () => {
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-mono text-muted-foreground">ID: {item.registration_id}</span>
                               <Badge variant="outline" className="text-[10px] h-4 px-1 capitalize">{item.role}</Badge>
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                <Lock className="h-2 w-2" /> {item.password}
+                              </span>
                             </div>
                           </div>
                         </div>

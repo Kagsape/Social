@@ -42,6 +42,7 @@ const Login = () => {
     const cleanId = registrationId.trim();
 
     try {
+      // 1. Buscar o e-mail atual associado a esta matrícula
       const { data: userData } = await supabase
         .from('users')
         .select('email')
@@ -50,6 +51,7 @@ const Login = () => {
 
       const targetEmail = userData?.email || `${cleanId}@app.local`;
 
+      // 2. Tentar Login normal
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: password,
@@ -61,6 +63,7 @@ const Login = () => {
         return;
       }
 
+      // 3. Se falhou e o usuário não existe no Auth, verificamos a Whitelist para o 1º acesso
       if (signInError?.message === 'Invalid login credentials' && !userData) {
         const { data: whitelistEntry, error: whitelistError } = await supabase
           .from('registration_whitelist')
@@ -69,8 +72,17 @@ const Login = () => {
           .maybeSingle();
 
         if (whitelistError) throw new Error('Erro ao validar matrícula.');
-        if (!whitelistEntry) throw new Error('Matrícula não autorizada.');
+        
+        if (!whitelistEntry) {
+          throw new Error('Matrícula não autorizada na lista branca.');
+        }
 
+        // VALIDAR SENHA DA LISTA BRANCA
+        if (password !== whitelistEntry.password) {
+          throw new Error('Senha incorreta para esta matrícula. Verifique com o administrador.');
+        }
+
+        // Criar a conta com a senha fornecida (que agora sabemos que é a correta da whitelist)
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: targetEmail,
           password: password,
@@ -84,6 +96,7 @@ const Login = () => {
         });
 
         if (signUpError) throw signUpError;
+        
         if (signUpData.session) {
           showSuccess('Conta criada com sucesso!');
           navigate(from, { replace: true });
@@ -112,7 +125,7 @@ const Login = () => {
         <Card className="border-none shadow-xl">
           <CardHeader>
             <CardTitle>Entrar</CardTitle>
-            <CardDescription>Use sua matrícula ou sua conta Google.</CardDescription>
+            <CardDescription>Use sua matrícula e a senha definida pelo administrador.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <Button 
