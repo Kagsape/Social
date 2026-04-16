@@ -11,9 +11,7 @@ import {
   Search, 
   Package, 
   Loader2, 
-  Filter, 
   Monitor, 
-  Laptop,
   Trash2
 } from 'lucide-react';
 import InventoryItemCard from '@/components/InventoryItemCard';
@@ -22,10 +20,8 @@ import LabComputerCard from '@/components/LabComputerCard';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -33,7 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showSuccess, showError } from '@/utils/toast';
 
 const Inventory = () => {
-  const { isAdmin, isTeacher, userProfile } = useAuth();
+  const { isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState('computers');
   
   // State para Equipamentos
@@ -151,7 +147,8 @@ const Inventory = () => {
   const filteredItems = items.filter(i => i.name.toLowerCase().includes(itemSearch.toLowerCase()));
   const filteredComps = computers.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
 
-  const canManage = isAdmin || isTeacher;
+  // Apenas administradores podem gerenciar (CRUD)
+  const canManage = isAdmin;
 
   return (
     <Layout>
@@ -159,7 +156,7 @@ const Inventory = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Recursos do Laboratório</h1>
-            <p className="text-muted-foreground">Gestão centralizada de computadores e equipamentos.</p>
+            <p className="text-muted-foreground">Visualização de computadores e equipamentos da sala de informática.</p>
           </div>
         </div>
 
@@ -208,7 +205,7 @@ const Inventory = () => {
                       onMaintain={(id) => updateCompStatus(id, 'maintenance')}
                       showActions={canManage}
                     />
-                    {isAdmin && (
+                    {canManage && (
                       <Button 
                         variant="destructive" size="icon" 
                         className="absolute -top-2 -right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
@@ -258,7 +255,7 @@ const Inventory = () => {
                     onEdit={(i) => { setEditingItem(i); setIsItemDialogOpen(true); }}
                     onDelete={handleDeleteItem}
                     canEdit={canManage}
-                    canDelete={isAdmin}
+                    canDelete={canManage}
                   />
                 ))}
               </div>
