@@ -63,7 +63,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 2. Buscar cargos (RBAC) em duas etapas para evitar travamentos de relacionamento
       let rolesList: string[] = [];
       try {
-        // Etapa A: Buscar IDs de cargos na tabela de ligação
         const { data: userRolesData, error: urError } = await supabase
           .from('user_roles')
           .select('role_id')
@@ -73,8 +72,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (userRolesData && userRolesData.length > 0) {
           const roleIds = userRolesData.map(ur => ur.role_id);
-          
-          // Etapa B: Buscar nomes dos cargos na tabela roles
           const { data: rolesData, error: rError } = await supabase
             .from('roles')
             .select('name')
@@ -87,14 +84,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('[Auth:Profile] ⚠️ Falha ao buscar cargos RBAC:', e.message);
       }
 
-      // Mesclar cargo fixo da coluna 'role' do perfil
       if (profile?.role && !rolesList.includes(profile.role)) {
         rolesList.push(profile.role);
       }
       
       setRoles(rolesList);
 
-      // 3. Buscar permissões baseadas nos cargos encontrados
       if (profile) {
         let mergedPermissions = {};
         try {
@@ -206,14 +201,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading ? children : (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-          <div className="flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            <p className="text-muted-foreground animate-pulse font-medium">Sincronizando acessos...</p>
-          </div>
-        </div>
-      )}
+      {children}
     </AuthContext.Provider>
   );
 };
