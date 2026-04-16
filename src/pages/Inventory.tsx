@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,7 +12,9 @@ import {
   Package, 
   Loader2, 
   Monitor, 
-  Trash2
+  Trash2,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import InventoryItemCard from '@/components/InventoryItemCard';
 import InventoryForm from '@/components/InventoryForm';
@@ -36,6 +38,7 @@ const Inventory = () => {
   // State para Equipamentos
   const [items, setItems] = useState<any[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
+  const [itemError, setItemError] = useState<string | null>(null);
   const [itemSearch, setItemSearch] = useState('');
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -43,48 +46,54 @@ const Inventory = () => {
   // State para Computadores
   const [computers, setComputers] = useState<any[]>([]);
   const [compLoading, setCompLoading] = useState(true);
+  const [compError, setCompError] = useState<string | null>(null);
   const [compSearch, setCompSearch] = useState('');
   const [isCompDialogOpen, setIsCompDialogOpen] = useState(false);
   const [isAddingComp, setIsAddingComp] = useState(false);
 
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     setItemsLoading(true);
+    setItemError(null);
     try {
       const { data, error } = await supabase
         .from('inventory_items')
         .select('*')
         .order('name');
+      
       if (error) throw error;
       setItems(data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao buscar inventário:', error);
+      setItemError(error.message || 'Erro ao carregar equipamentos');
     } finally {
       setItemsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchComputers = async () => {
+  const fetchComputers = useCallback(async () => {
     setCompLoading(true);
+    setCompError(null);
     try {
       const { data, error } = await supabase
         .from('lab_computers')
         .select('*')
         .order('name');
+      
       if (error) throw error;
       setComputers(data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao buscar computadores:', error);
+      setCompError(error.message || 'Erro ao carregar computadores');
     } finally {
       setCompLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchItems();
     fetchComputers();
-  }, []);
+  }, [fetchItems, fetchComputers]);
 
-  // Handlers para Equipamentos
   const handleDeleteItem = async (id: string) => {
     if (!confirm('Excluir este item permanentemente?')) return;
     try {
@@ -97,7 +106,6 @@ const Inventory = () => {
     }
   };
 
-  // Handlers para Computadores
   const handleAddComputer = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsAddingComp(true);
@@ -148,9 +156,6 @@ const Inventory = () => {
   const filteredItems = items.filter(i => i.name.toLowerCase().includes(itemSearch.toLowerCase()));
   const filteredComps = computers.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
 
-  // Apenas administradores podem gerenciar (CRUD)
-  const canManage = isAdmin;
-
   return (
     <Layout>
       <div className="space-y-8">
@@ -171,7 +176,6 @@ const Inventory = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Aba de Computadores */}
           <TabsContent value="computers" className="space-y-6">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
@@ -183,7 +187,7 @@ const Inventory = () => {
                   onChange={(e) => setCompSearch(e.target.value)}
                 />
               </div>
-              {canManage && (
+              {isAdmin && (
                 <Button className="gap-2 rounded-xl" onClick={() => setIsCompDialogOpen(true)}>
                   <Plus className="h-4 w-4" /> Novo Computador
                 </Button>
@@ -191,7 +195,15 @@ const Inventory = () => {
             </div>
 
             {compLoading ? (
-              <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8" /></div>
+              <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
+            ) : compError ? (
+              <div className="text-center py-20 bg-destructive/5 rounded-3xl border border-destructive/20">
+                <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+                <p className="text-destructive font-medium mb-4">{compError}</p>
+                <Button variant="outline" onClick={fetchComputers} className="gap-2">
+                  <RefreshCw className="h-4 w-4" /> Tentar Novamente
+                </Button>
+              </div>
             ) : filteredComps.length === 0 ? (
               <div className="text-center py-20 border-2 border-dashed rounded-3xl">
                 <Monitor className="h-12 w-12 mx-auto opacity-20 mb-4" />
@@ -204,9 +216,9 @@ const Inventory = () => {
                     <LabComputerCard 
                       computer={comp} 
                       onMaintain={(id) => updateCompStatus(id, 'maintenance')}
-                      showActions={canManage}
+                      showActions={isAdmin}
                     />
-                    {canManage && (
+                    {isAdmin && (
                       <Button 
                         variant="destructive" size="icon" 
                         className="absolute -top-2 -right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
@@ -221,7 +233,6 @@ const Inventory = () => {
             )}
           </TabsContent>
 
-          {/* Aba de Equipamentos */}
           <TabsContent value="items" className="space-y-6">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
@@ -233,7 +244,7 @@ const Inventory = () => {
                   onChange={(e) => setItemSearch(e.target.value)}
                 />
               </div>
-              {canManage && (
+              {isAdmin && (
                 <Button className="gap-2 rounded-xl" onClick={() => { setEditingItem(null); setIsItemDialogOpen(true); }}>
                   <Plus className="h-4 w-4" /> Novo Item
                 </Button>
@@ -241,7 +252,15 @@ const Inventory = () => {
             </div>
 
             {itemsLoading ? (
-              <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8" /></div>
+              <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
+            ) : itemError ? (
+              <div className="text-center py-20 bg-destructive/5 rounded-3xl border border-destructive/20">
+                <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+                <p className="text-destructive font-medium mb-4">{itemError}</p>
+                <Button variant="outline" onClick={fetchItems} className="gap-2">
+                  <RefreshCw className="h-4 w-4" /> Tentar Novamente
+                </Button>
+              </div>
             ) : filteredItems.length === 0 ? (
               <div className="text-center py-20 border-2 border-dashed rounded-3xl">
                 <Package className="h-12 w-12 mx-auto opacity-20 mb-4" />
@@ -255,8 +274,8 @@ const Inventory = () => {
                     item={item} 
                     onEdit={(i) => { setEditingItem(i); setIsItemDialogOpen(true); }}
                     onDelete={handleDeleteItem}
-                    canEdit={canManage}
-                    canDelete={canManage}
+                    canEdit={isAdmin}
+                    canDelete={isAdmin}
                   />
                 ))}
               </div>
@@ -264,7 +283,6 @@ const Inventory = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Dialogs */}
         <Dialog open={isItemDialogOpen} onOpenChange={setIsItemDialogOpen}>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
