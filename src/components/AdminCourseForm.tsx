@@ -24,14 +24,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Edit3, Plus } from 'lucide-react';
+import { Loader2, Edit3, Plus, Trash2 } from 'lucide-react';
 
 interface AdminCourseFormProps {
   courseId?: string;
   onCourseSaved?: () => void;
+  onCourseDeleted?: () => void;
 }
 
-const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSaved }) => {
+const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSaved, onCourseDeleted }) => {
   const { user, isAdmin } = useAuth();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [formData, setFormData] = useState({
@@ -41,6 +42,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
     teacher_id: ''
   });
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -137,6 +139,30 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
     }
   };
 
+  const handleDelete = async () => {
+    if (!courseId) return;
+    if (!confirm(`Tem certeza que deseja excluir o curso "${formData.name}"? Esta ação não pode ser desfeita e removerá todas as matrículas e notas associadas.`)) return;
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('courses')
+        .delete()
+        .eq('id', courseId);
+
+      if (error) throw error;
+
+      showSuccess('Curso excluído com sucesso!');
+      setIsDialogOpen(false);
+      onCourseDeleted?.();
+    } catch (error: any) {
+      console.error('Erro ao excluir curso:', error);
+      showError(`Erro ao excluir: ${error.message}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
@@ -148,10 +174,10 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
       <DialogContent className="max-w-2xl">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{courseId ? 'Editar Curso' : 'Criar Novo Curso'}</DialogTitle>
+            <DialogTitle>{courseId ? 'Gerenciar Curso' : 'Criar Novo Curso'}</DialogTitle>
             <DialogDescription>
               {courseId 
-                ? 'Atualize as informações do curso. Administradores podem reatribuir o professor.'
+                ? 'Atualize as informações ou exclua este curso permanentemente.'
                 : 'Preencha as informações para criar um novo curso.'}
             </DialogDescription>
           </DialogHeader>
@@ -205,8 +231,23 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={loading || !formData.name || !formData.code}>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            {courseId && (
+              <Button 
+                type="button" 
+                variant="destructive" 
+                className="sm:mr-auto gap-2" 
+                onClick={handleDelete}
+                disabled={deleting || loading}
+              >
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Excluir Curso
+              </Button>
+            )}
+            <Button variant="outline" type="button" onClick={() => setIsDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={loading || deleting || !formData.name || !formData.code}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Salvar Alterações'}
             </Button>
           </DialogFooter>

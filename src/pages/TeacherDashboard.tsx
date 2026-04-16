@@ -40,13 +40,14 @@ const TeacherDashboard = () => {
   useEffect(() => {
     if (selectedCourse && selectedCourse !== 'none') {
       fetchCourseStudents(selectedCourse);
+    } else {
+      setStudents([]);
     }
   }, [selectedCourse]);
 
   const fetchTeacherData = async () => {
     setLoading(true);
     try {
-      // Se for admin, busca todos. Se for professor, busca onde ele é o teacher_id ou created_by
       let query = supabase.from('courses').select('*');
       
       if (!isAdmin) {
@@ -57,8 +58,14 @@ const TeacherDashboard = () => {
       if (error) throw error;
 
       setCourses(teacherCourses || []);
-      if (teacherCourses && teacherCourses.length > 0 && !selectedCourse) {
-        setSelectedCourse(teacherCourses[0].id);
+      
+      // Se o curso selecionado não existe mais na lista, reseta a seleção
+      if (teacherCourses && teacherCourses.length > 0) {
+        if (!selectedCourse || !teacherCourses.find(c => c.id === selectedCourse)) {
+          setSelectedCourse(teacherCourses[0].id);
+        }
+      } else {
+        setSelectedCourse('none');
       }
 
       const { data: enrollments } = await supabase
@@ -100,6 +107,11 @@ const TeacherDashboard = () => {
     }
   };
 
+  const handleCourseDeleted = () => {
+    setSelectedCourse('');
+    fetchTeacherData();
+  };
+
   if (loading) return <Layout><div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10" /></div></Layout>;
 
   return (
@@ -132,7 +144,11 @@ const TeacherDashboard = () => {
             </select>
 
             {selectedCourse && selectedCourse !== 'none' && (
-              <AdminCourseForm courseId={selectedCourse} onCourseSaved={fetchTeacherData} />
+              <AdminCourseForm 
+                courseId={selectedCourse} 
+                onCourseSaved={fetchTeacherData} 
+                onCourseDeleted={handleCourseDeleted}
+              />
             )}
           </div>
         </div>
@@ -155,7 +171,11 @@ const TeacherDashboard = () => {
 
           <TabsContent value="students">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {students.length === 0 ? (
+              {selectedCourse === 'none' ? (
+                <div className="col-span-full text-center py-12 text-muted-foreground border-2 border-dashed rounded-2xl">
+                  Crie ou selecione um curso para ver os alunos.
+                </div>
+              ) : students.length === 0 ? (
                 <div className="col-span-full text-center py-12 text-muted-foreground border-2 border-dashed rounded-2xl">
                   Nenhum aluno matriculado nesta turma.
                 </div>
@@ -184,11 +204,19 @@ const TeacherDashboard = () => {
           </TabsContent>
 
           <TabsContent value="attendance">
-            <AttendanceForm courseId={selectedCourse} students={students} />
+            {selectedCourse !== 'none' ? (
+              <AttendanceForm courseId={selectedCourse} students={students} />
+            ) : (
+              <p className="text-center py-12 text-muted-foreground">Selecione um curso primeiro.</p>
+            )}
           </TabsContent>
 
           <TabsContent value="grades">
-            <GradeForm courseId={selectedCourse} students={students} />
+            {selectedCourse !== 'none' ? (
+              <GradeForm courseId={selectedCourse} students={students} />
+            ) : (
+              <p className="text-center py-12 text-muted-foreground">Selecione um curso primeiro.</p>
+            )}
           </TabsContent>
 
           <TabsContent value="reservations">
