@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Layout from '@/components/Layout';
 import CourseCard from '@/components/CourseCard';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop, BookOpen, Monitor } from 'lucide-react';
+import { ArrowRight, Code2, Terminal, Cpu, Globe, Users, Laptop, BookOpen, Monitor, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
@@ -14,10 +14,40 @@ const Index = () => {
   const { userProfile } = useAuth();
   const [featuredCourses, setFeaturedCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [labStatus, setLabStatus] = useState({ total: 0, working: 0 });
+  const [labStatus, setLabStatus] = useState({ total: 0, working: 0, inUse: 0 });
+
+  const fetchLabStatus = useCallback(async () => {
+    try {
+      // 1. Buscar todos os computadores
+      const { data: computers } = await supabase
+        .from('lab_computers')
+        .select('id, status');
+      
+      // 2. Buscar reservas em andamento (uso real)
+      const { data: activeUsage } = await supabase
+        .from('lab_usage')
+        .select('computer_id')
+        .eq('status', 'in_progress');
+
+      if (computers) {
+        const total = computers.length;
+        const working = computers.filter(c => c.status === 'working').length;
+        const inUse = activeUsage?.length || 0;
+        
+        setLabStatus({
+          total,
+          working,
+          inUse
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao buscar status do lab:', error);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const { data: courses } = await supabase
           .from('courses')
@@ -34,17 +64,7 @@ const Index = () => {
         }));
         
         setFeaturedCourses(processed);
-
-        const { data: computers } = await supabase
-          .from('lab_computers')
-          .select('status');
-        
-        if (computers) {
-          setLabStatus({
-            total: computers.length,
-            working: computers.filter(c => c.status === 'working').length
-          });
-        }
+        await fetchLabStatus();
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -53,8 +73,20 @@ const Index = () => {
     };
 
     fetchData();
-  }, []);
 
+    // Inscrição em tempo real para mudanças nos computadores e no uso
+    const computersChannel = supabase
+      .channel('lab_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lab_computers' }, fetchLabStatus)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lab_usage' }, fetchLabStatus)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(computersChannel);
+    };
+  }, [fetchLabStatus]);
+
+  const freeComputers = Math.max(0, labStatus.working - labStatus.inUse);
   const reservationLink = userProfile?.role === 'teacher' ? '/teacher' : '/dashboard';
 
   return (
@@ -63,13 +95,15 @@ const Index = () => {
       <div className="mb-8 flex justify-center px-4">
         <div className="bg-white dark:bg-slate-900 px-4 md:px-6 py-3 rounded-2xl md:rounded-full border shadow-sm flex flex-wrap items-center justify-center gap-3 md:gap-6 animate-in fade-in slide-in-from-top-4 duration-700 max-w-full">
           <div className="flex items-center gap-2">
-            <div className={`h-3 w-3 rounded-full ${labStatus.working > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <div className={`h-3 w-3 rounded-full ${freeComputers > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
             <span className="text-xs md:text-sm font-bold whitespace-nowrap">Status do Laboratório</span>
           </div>
           <div className="hidden md:block h-4 w-px bg-border" />
           <div className="flex items-center gap-2 text-xs md:text-sm">
             <Monitor className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium whitespace-nowrap">{labStatus.working} / {labStatus.total} Máquinas Livres</span>
+            <span className="font-medium whitespace-nowrap">
+              {loading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : `${freeComputers} / ${labStatus.total}`} Máquinas Livres
+            </span>
           </div>
           <Link to={reservationLink}>
             <Button size="sm" variant="ghost" className="h-8 rounded-full text-[10px] md:text-xs gap-1">
@@ -95,11 +129,19 @@ const Index = () => {
             Bem-vindo ao portal de tecnologia do CIEP 165. Aqui você aprende programação, robótica e domina o mundo digital.
           </p>
           <div className="flex flex-wrap gap-4">
-            <Link to="/login">
-              <Button size="lg" className="rounded-full px-6 md:px-8 bg-blue-600 hover:bg-blue-700 text-white border-none text-sm md:text-base">
-                Acessar Minha Conta
-              </Button>
-            </Link>
+            {!userProfile ? (
+              <Link to="/login">
+                <Button size="lg" className="rounded-full px-6 md:px-8 bg-blue-600 hover:bg-blue-700 text-white border-none text-sm md:text-base">
+                  Acessar Minha Conta
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/feed">
+                <Button size="lg" className="rounded-full px-6 md:px-8 bg-blue-600 hover:bg-blue-700 text-white border-none text-sm md:text-base">
+                  Ir para o Feed
+                </Button>
+              </Link>
+            )}
             <Link to="/courses">
               <Button size="lg" variant="outline" className="rounded-full px-6 md:px-8 bg-white/5 backdrop-blur-sm border-white/20 hover:bg-white/10 text-sm md:text-base">
                 Ver Cursos

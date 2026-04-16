@@ -27,39 +27,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchUserProfile = useCallback(async (userId: string) => {
-    console.log(`[Auth:Profile] Sincronizando permissões para: ${userId}`);
+  const fetchUserProfile = useCallback(async (userId: string, authUser?: User) => {
+    console.log(`[Auth:Profile] Sincronizando dados para: ${userId}`);
     try {
-      // 1. Buscar perfil básico (onde fica a 'tag' de role direta)
-      const { data: profile, error: profileError } = await supabase
+      // 1. Buscar perfil básico
+      let { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
 
+      // 2. Fallback para usuários antigos ou OAuth que não dispararam o trigger
+      if (!profile && authUser) {
+        console.log('[Auth:Profile] Perfil não encontrado. Criando registro básico...');
+        const { data: newProfile, error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: userId,
+            name: authUser.user_metadata?.name || authUser.email?.split('@')[0],
+            email: authUser.email,
+            role: authUser.user_metadata?.role || 'student',
+            avatar_url: authUser.user_metadata?.avatar_url
+          })
+          .select()
+          .single();
+        
+        if (!insertError) profile = newProfile;
+      }
+
       if (profileError) console.error('[Auth:Profile] Erro users:', profileError.message);
 
-      // 2. Buscar cargos na tabela de relacionamento (RBAC)
-      const { data: userRoles, error: rolesError } = await supabase
+      // 3. Buscar cargos na tabela de relacionamento (RBAC)
+      const { data: userRoles } = await supabase
         .from('user_roles')
         .select('roles(name)')
         .eq('user_id', userId);
 
-      if (rolesError) console.error('[Auth:Profile] Erro user_roles:', rolesError.message);
-
-      // 3. Mesclar cargos de ambas as fontes para compatibilidade total
+      // 4. Mesclar cargos
       const rolesList = userRoles?.map((ur: any) => ur.roles?.name).filter(Boolean) || [];
-      
-      // Se o usuário tem um cargo definido no perfil (tag antiga/direta), adicionamos à lista
       if (profile?.role && !rolesList.includes(profile.role)) {
-        console.log(`[Auth:Profile] Cargo '${profile.role}' detectado via perfil direto.`);
         rolesList.push(profile.role);
       }
       
       setRoles(rolesList);
 
       if (profile) {
-        // 4. Buscar permissões detalhadas baseadas nos cargos identificados
+        // 5. Buscar permissões detalhadas
         const { data: roleData } = await supabase
           .from('roles')
           .select('permissions')
@@ -86,7 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (mounted && initialSession) {
           setSession(initialSession);
           setUser(initialSession.user);
-          fetchUserProfile(initialSession.user.id);
+          await fetchUserProfile(initialSession.user.id, initialSession.user);
         }
       } catch (error) {
         console.error('[Auth:Init] Erro:', error);
@@ -102,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
-          if (currentSession?.user) fetchUserProfile(currentSession.user.id);
+          if (currentSession?.user) await fetchUserProfile(currentSession.user.id, currentSession.user);
           setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
@@ -130,10 +143,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshProfile = async () => {
-    if (user) await fetchUserProfile(user.id);
+    if (user) await fetchUserProfile(user.id, user);
   };
 
-  // E-mail do Administrador Mestre
   const isChiefAdmin = user?.email === 'xakatosh66@gmail.com';
 
   const hasPermission = (permission: string) => {
