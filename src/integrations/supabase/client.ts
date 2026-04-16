@@ -11,9 +11,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    // Definir uma chave de armazenamento única ajuda a evitar conflitos de BroadcastChannel
     storageKey: 'ciep165-auth-token',
-    // Desativamos explicitamente o fluxo de debug de abas se necessário, 
-    // mas o persistSession já deve garantir o funcionamento.
   }
 });

@@ -16,6 +16,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
 
@@ -31,9 +32,7 @@ const CourseLessonsPage = () => {
   const { lessons, loading, fetchLessons } = useLessons(isValidUuid ? id : undefined);
 
   useEffect(() => {
-    console.log('[CourseLessons] ID capturado:', id);
     if (!isValidUuid) {
-      console.error('[CourseLessons] ID inválido:', id);
       showError('ID do curso inválido.');
       navigate('/courses');
       return;
@@ -110,6 +109,9 @@ const CourseLessonsPage = () => {
                         <DialogContent className="max-w-2xl">
                           <DialogHeader>
                             <DialogTitle>Notas Pedagógicas: {lesson.title}</DialogTitle>
+                            <DialogDescription>
+                              Informações restritas aos professores sobre o andamento desta aula.
+                            </DialogDescription>
                           </DialogHeader>
                           <InternalNotesForm lessonId={lesson.id} />
                         </DialogContent>

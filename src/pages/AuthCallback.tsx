@@ -10,27 +10,29 @@ const AuthCallback = () => {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      // O Supabase lida automaticamente com a troca do código pelo token
-      // se estivermos na mesma URL configurada no redirectTo.
-      const { data, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('[AuthCallback] Erro ao recuperar sessão:', error.message);
-        navigate('/login');
-        return;
-      }
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('[AuthCallback] Erro:', error.message);
+          navigate('/login');
+          return;
+        }
 
-      if (data.session) {
-        console.log('[AuthCallback] Sessão recuperada com sucesso!');
-        navigate('/feed');
-      } else {
-        // Caso não tenha sessão imediata, aguardamos o evento de mudança de estado
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-          if (event === 'SIGNED_IN' && session) {
-            subscription.unsubscribe();
-            navigate('/feed');
-          }
-        });
+        if (data.session) {
+          console.log('[AuthCallback] Sessão ativa, redirecionando...');
+          // Pequeno delay para garantir que o estado do AuthProvider seja atualizado
+          setTimeout(() => navigate('/feed'), 500);
+        } else {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+              subscription.unsubscribe();
+              navigate('/feed');
+            }
+          });
+        }
+      } catch (err) {
+        navigate('/login');
       }
     };
 
