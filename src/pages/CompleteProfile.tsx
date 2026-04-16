@@ -26,6 +26,7 @@ const CompleteProfile = () => {
   const [role, setRole] = useState<'student' | 'teacher'>('student');
 
   useEffect(() => {
+    // Se já tem matrícula ou é admin mestre, vai pro feed
     const isChiefAdmin = user?.email === 'xakatosh66@gmail.com';
     if (isChiefAdmin || (userProfile && (userProfile.student_id || userProfile.teacher_id))) {
       navigate('/feed');
@@ -40,28 +41,19 @@ const CompleteProfile = () => {
     const cleanId = registrationId.trim();
 
     try {
+      // 1. Verificar na Whitelist
       const { data: whitelistEntry, error: whitelistError } = await supabase
         .from('registration_whitelist')
         .select('*')
         .eq('registration_id', cleanId)
         .maybeSingle();
 
-      if (whitelistError) {
-        console.error('Erro Whitelist:', whitelistError);
-        throw new Error('Erro ao validar matrícula. Verifique as políticas de segurança do banco.');
-      }
+      if (whitelistError) throw new Error('Erro ao validar matrícula.');
+      if (!whitelistEntry) throw new Error(`O ID "${cleanId}" não está autorizado.`);
+      if (whitelistEntry.role !== role) throw new Error(`Este ID é para o cargo de ${whitelistEntry.role}.`);
 
-      if (!whitelistEntry) {
-        throw new Error(`O ID "${cleanId}" não está na lista de autorizados.`);
-      }
-
-      if (whitelistEntry.role !== role) {
-        const cargoCorreto = whitelistEntry.role === 'student' ? 'ALUNO' : 'PROFESSOR';
-        throw new Error(`Este ID está autorizado apenas para o cargo de ${cargoCorreto}.`);
-      }
-
+      // 2. Vincular matrícula ao usuário logado (Google)
       const idColumn = role === 'student' ? 'student_id' : 'teacher_id';
-      
       const { error: updateError } = await supabase
         .from('users')
         .update({
@@ -73,14 +65,7 @@ const CompleteProfile = () => {
 
       if (updateError) throw updateError;
 
-      await supabase.auth.updateUser({
-        data: { 
-          role: role,
-          [idColumn]: cleanId 
-        }
-      });
-
-      showSuccess('Cadastro concluído!');
+      showSuccess('Matrícula vinculada com sucesso!');
       await refreshProfile();
       navigate('/feed');
       
@@ -100,9 +85,9 @@ const CompleteProfile = () => {
               <ShieldAlert className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-2xl">Conclua seu Cadastro</CardTitle>
+          <CardTitle className="text-2xl">Valide sua Matrícula</CardTitle>
           <CardDescription>
-            Valide sua matrícula no CIEP 165 para acessar o portal.
+            Para acessar o portal via Google, precisamos confirmar sua autorização.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -137,13 +122,8 @@ const CompleteProfile = () => {
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 Validar e Acessar
               </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                className="w-full text-muted-foreground"
-                onClick={() => signOut()}
-              >
-                <LogOut className="h-4 w-4 mr-2" /> Sair da conta
+              <Button type="button" variant="ghost" className="w-full" onClick={() => signOut()}>
+                Sair da conta
               </Button>
             </div>
           </form>

@@ -72,7 +72,6 @@ const App = () => (
             <Route path="/courses/:id/lessons" element={<ProtectedRoute><CourseLessonsPage /></ProtectedRoute>} />
             <Route path="/student-file/:studentId" element={<ProtectedRoute allowedRoles={['teacher', 'admin']}><StudentFilePage /></ProtectedRoute>} />
             
-            {/* Rota Unificada de Recursos Físicos */}
             <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
 
             <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />

@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { LayoutDashboard, ArrowLeft, Hash, Lock, Loader2, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, ArrowLeft, Hash, Lock, Loader2, ShieldCheck, Chrome } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
+import { Separator } from '@/components/ui/separator';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -19,6 +20,20 @@ const Login = () => {
 
   const from = (location.state as any)?.from?.pathname || '/feed';
 
+  const handleGoogleLogin = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      showError('Erro ao conectar com Google.');
+    }
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!registrationId.trim() || !password.trim()) return;
@@ -27,18 +42,14 @@ const Login = () => {
     const cleanId = registrationId.trim();
 
     try {
-      // 1. Buscar o e-mail atual associado a esta matrícula na tabela pública
-      const { data: userData, error: userError } = await supabase
+      const { data: userData } = await supabase
         .from('users')
         .select('email')
         .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
         .maybeSingle();
 
-      // Se o usuário já existe, usamos o e-mail que está no banco (pode ter sido alterado)
-      // Se não existe, usamos o padrão dummy para o primeiro acesso
       const targetEmail = userData?.email || `${cleanId}@app.local`;
 
-      // 2. Tentar Login
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: password,
@@ -50,22 +61,16 @@ const Login = () => {
         return;
       }
 
-      // 3. Se falhou e o usuário não existe, tentamos o fluxo de criação automática (Whitelist)
       if (signInError?.message === 'Invalid login credentials' && !userData) {
-        
         const { data: whitelistEntry, error: whitelistError } = await supabase
           .from('registration_whitelist')
           .select('*')
           .eq('registration_id', cleanId)
           .maybeSingle();
 
-        if (whitelistError) throw new Error('Erro ao validar matrícula no servidor.');
+        if (whitelistError) throw new Error('Erro ao validar matrícula.');
+        if (!whitelistEntry) throw new Error('Matrícula não autorizada.');
 
-        if (!whitelistEntry) {
-          throw new Error('Matrícula não encontrada na lista de autorizados.');
-        }
-
-        // Criação Automática (Primeiro Acesso)
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: targetEmail,
           password: password,
@@ -79,20 +84,15 @@ const Login = () => {
         });
 
         if (signUpError) throw signUpError;
-
         if (signUpData.session) {
-          showSuccess('Conta criada e validada com sucesso!');
+          showSuccess('Conta criada com sucesso!');
           navigate(from, { replace: true });
-        } else {
-          showSuccess('Conta criada! Por favor, tente entrar agora.');
         }
       } else {
         throw signInError || new Error('Credenciais inválidas.');
       }
-
     } catch (error: any) {
-      console.error('[Auth] Erro:', error);
-      showError(error.message || 'Erro ao acessar o sistema.');
+      showError(error.message || 'Erro ao acessar.');
     } finally {
       setLoading(false);
     }
@@ -103,25 +103,34 @@ const Login = () => {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-8">
-            <ArrowLeft className="h-4 w-4" /> Voltar para o início
+            <ArrowLeft className="h-4 w-4" /> Início
           </Link>
-          <div className="flex justify-center mb-4">
-            <div className="bg-primary p-3 rounded-2xl shadow-lg">
-              <ShieldCheck className="h-8 w-8 text-primary-foreground" />
-            </div>
-          </div>
           <h2 className="text-3xl font-bold tracking-tight">Acesso ao Portal</h2>
           <p className="text-muted-foreground mt-2">CIEP 165 Brigadeiro Sérgio Carvalho</p>
         </div>
 
         <Card className="border-none shadow-xl">
           <CardHeader>
-            <CardTitle>Login via Matrícula</CardTitle>
-            <CardDescription>
-              Se for seu primeiro acesso, sua conta será criada automaticamente ao validar sua matrícula.
-            </CardDescription>
+            <CardTitle>Entrar</CardTitle>
+            <CardDescription>Use sua matrícula ou sua conta Google.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
+            <Button 
+              variant="outline" 
+              className="w-full h-12 rounded-xl gap-3 font-bold" 
+              onClick={handleGoogleLogin}
+            >
+              <Chrome className="h-5 w-5 text-red-500" />
+              Entrar com Google
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center"><Separator /></div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Ou via matrícula</span>
+              </div>
+            </div>
+
             <form onSubmit={handleAuth} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="registration">Número de Matrícula</Label>
@@ -129,7 +138,6 @@ const Login = () => {
                   <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="registration"
-                    type="text"
                     placeholder="Digite sua matrícula"
                     value={registrationId}
                     onChange={(e) => setRegistrationId(e.target.value)}
@@ -145,7 +153,7 @@ const Login = () => {
                   <Input
                     id="password"
                     type="password"
-                    placeholder="Sua senha de acesso"
+                    placeholder="Sua senha"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -158,11 +166,6 @@ const Login = () => {
               </Button>
             </form>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <p className="text-center text-xs text-muted-foreground">
-              Problemas com o acesso? Procure a coordenação da Sala de Informática.
-            </p>
-          </CardFooter>
         </Card>
       </div>
     </div>
