@@ -21,6 +21,20 @@ const Login = () => {
 
   const from = (location.state as any)?.from?.pathname || '/feed';
 
+  const handleGoogleLogin = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      showError('Erro ao conectar com Google.');
+    }
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!registrationId.trim() || !password.trim()) return;
@@ -29,7 +43,6 @@ const Login = () => {
     setErrorDetail(null);
     const cleanId = registrationId.trim();
 
-    // Timeout local para o login (15 segundos)
     const timeoutId = setTimeout(() => {
       if (loading) {
         setLoading(false);
@@ -39,22 +52,14 @@ const Login = () => {
     }, 15000);
 
     try {
-      console.log('[Login] Iniciando autenticação para:', cleanId);
-
-      // 1. Buscar e-mail na tabela de usuários
-      const { data: userData, error: userQueryError } = await supabase
+      const { data: userData } = await supabase
         .from('users')
         .select('email')
         .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
         .maybeSingle();
 
-      if (userQueryError) {
-        console.error('[Login] Erro na busca de usuário:', userQueryError);
-      }
-
       const targetEmail = userData?.email || `${cleanId}@app.local`;
 
-      // 2. Tentar Login
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: password,
@@ -67,7 +72,6 @@ const Login = () => {
         return;
       }
 
-      // 3. Se falhou, verificar Whitelist para primeiro acesso
       const { data: whitelistEntry, error: whitelistError } = await supabase
         .from('registration_whitelist')
         .select('*')
@@ -77,14 +81,13 @@ const Login = () => {
       if (whitelistError) throw new Error(`Erro ao validar na lista branca: ${whitelistError.message}`);
       
       if (!whitelistEntry) {
-        throw new Error('Esta matrícula não está autorizada no sistema. Procure a secretaria.');
+        throw new Error('Esta matrícula não está autorizada no sistema.');
       }
 
       if (password !== whitelistEntry.password) {
         throw new Error('Senha incorreta para esta matrícula.');
       }
 
-      // 4. Primeiro acesso: Criar conta
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: targetEmail,
         password: password,
@@ -108,7 +111,6 @@ const Login = () => {
         setLoading(false);
       }
     } catch (error: any) {
-      console.error('[Login] Erro capturado:', error);
       setErrorDetail(error.message);
       showError(error.message);
       setLoading(false);
@@ -130,7 +132,7 @@ const Login = () => {
         <Card className="border-none shadow-xl">
           <CardHeader>
             <CardTitle>Entrar</CardTitle>
-            <CardDescription>Use sua matrícula e senha autorizada.</CardDescription>
+            <CardDescription>Use sua matrícula ou sua conta Google.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {errorDetail && (
@@ -139,6 +141,23 @@ const Login = () => {
                 <p><strong>Erro:</strong> {errorDetail}</p>
               </div>
             )}
+
+            <Button 
+              variant="outline" 
+              className="w-full h-12 rounded-xl gap-3 font-bold" 
+              onClick={handleGoogleLogin}
+              disabled={loading}
+            >
+              <Chrome className="h-5 w-5 text-red-500" />
+              Entrar com Google
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center"><Separator /></div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Ou via matrícula</span>
+              </div>
+            </div>
 
             <form onSubmit={handleAuth} className="space-y-4">
               <div className="space-y-2">
