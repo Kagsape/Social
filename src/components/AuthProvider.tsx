@@ -29,10 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const fetchUserProfile = useCallback(async (userId: string, authUser?: User) => {
-    const timestamp = new Date().toLocaleTimeString();
-    console.log(`[${timestamp}] [AUTH_DEBUG] 🔍 Iniciando busca de perfil para ID:`, userId);
-    
+  const fetchUserProfile = useCallback(async (userId: string, authUser: User) => {
     try {
       const { data: profile, error: profileError } = await supabase
         .from('users')
@@ -40,75 +37,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .maybeSingle();
 
-      if (profileError) {
-        console.error(`[${timestamp}] [AUTH_DEBUG] ❌ Erro ao buscar perfil na tabela 'users':`, profileError);
-        return;
-      }
+      if (profileError) throw profileError;
 
       if (!profile) {
-        console.warn(`[${timestamp}] [AUTH_DEBUG] ⚠️ Perfil não encontrado na tabela 'users'. Tentando auto-provisionamento...`);
-        const metadata = authUser?.user_metadata;
-        
+        // Auto-provisionamento se o perfil não existir na tabela users
+        const metadata = authUser.user_metadata;
         const { data: newProfile, error: insertError } = await supabase.from('users').insert({
           id: userId,
-          name: metadata?.name || authUser?.email?.split('@')[0],
-          email: authUser?.email,
+          name: metadata?.name || authUser.email?.split('@')[0],
+          email: authUser.email,
           role: metadata?.role || 'student',
           student_id: metadata?.student_id || null,
           teacher_id: metadata?.teacher_id || null,
         }).select().single();
 
-        if (insertError) {
-          console.error(`[${timestamp}] [AUTH_DEBUG] ❌ Falha ao criar perfil automático:`, insertError);
-        } else {
-          console.log(`[${timestamp}] [AUTH_DEBUG] ✅ Perfil criado com sucesso:`, newProfile);
-          setUserProfile(newProfile);
-          if (newProfile.role) setRoles([newProfile.role]);
-        }
+        if (insertError) throw insertError;
+        setUserProfile(newProfile);
+        setRoles([newProfile.role]);
       } else {
-        console.log(`[${timestamp}] [AUTH_DEBUG] ✅ Perfil carregado:`, profile);
         setUserProfile(profile);
-        if (profile.role) setRoles([profile.role]);
+        setRoles([profile.role]);
       }
-    } catch (err) {
-      console.error(`[${timestamp}] [AUTH_DEBUG] 💥 Erro crítico no fetchUserProfile:`, err);
+    } catch (err: any) {
+      console.error("[AuthProvider] Erro ao carregar perfil:", err.message);
     }
   }, []);
 
   useEffect(() => {
     let mounted = true;
-    const timestamp = new Date().toLocaleTimeString();
 
     const initialize = async () => {
-      console.log(`[${timestamp}] [AUTH_DEBUG] 🚀 Inicializando AuthProvider...`);
       try {
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error(`[${timestamp}] [AUTH_DEBUG] ❌ Erro ao obter sessão inicial:`, error);
-          setAuthError(`Erro de conexão: ${error.message}`);
-          setLoading(false);
-          return;
-        }
-
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (mounted) {
-          if (initialSession) {
-            console.log(`[${timestamp}] [AUTH_DEBUG] 🔑 Sessão encontrada para:`, initialSession.user.email);
-            setSession(initialSession);
-            setUser(initialSession.user);
+          setSession(initialSession);
+          setUser(initialSession?.user ?? null);
+          if (initialSession?.user) {
             await fetchUserProfile(initialSession.user.id, initialSession.user);
-          } else {
-            console.log(`[${timestamp}] [AUTH_DEBUG] ℹ️ Nenhuma sessão ativa encontrada.`);
           }
         }
       } catch (error: any) {
-        console.error(`[${timestamp}] [AUTH_DEBUG] ❌ Falha catastrófica na inicialização:`, error);
-        setAuthError(`Falha na inicialização: ${error.message}`);
+        setAuthError(error.message);
       } finally {
-        if (mounted) {
-          console.log(`[${timestamp}] [AUTH_DEBUG] 🏁 Finalizando estado de carregamento.`);
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
     };
 
@@ -117,7 +88,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         if (!mounted) return;
-        console.log(`[${new Date().toLocaleTimeString()}] [AUTH_DEBUG] 🔄 Evento de Auth:`, event);
 
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
@@ -143,7 +113,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchUserProfile]);
 
   const signOut = async () => {
-    console.log(`[${new Date().toLocaleTimeString()}] [AUTH_DEBUG] 🚪 Saindo...`);
     setLoading(true);
     await supabase.auth.signOut();
   };
@@ -167,11 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hasPermission: (p: string) => roles.includes('admin') || !!userProfile?.permissions?.[p]
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
