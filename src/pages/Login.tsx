@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Hash, Lock, Loader2, ArrowLeft, Chrome, AlertCircle, Clock } from 'lucide-react';
+import { Hash, Lock, Loader2, ArrowLeft, Chrome, AlertCircle, WifiOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import { Separator } from '@/components/ui/separator';
@@ -21,16 +21,9 @@ const Login = () => {
 
   const from = (location.state as any)?.from?.pathname || '/feed';
 
-  // Função auxiliar para evitar que o Supabase trave a UI para sempre
-  const withTimeout = async (promise: Promise<any>, timeoutMs: number = 8000) => {
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Tempo de resposta do servidor esgotado (Timeout)")), timeoutMs)
-    );
-    return Promise.race([promise, timeoutPromise]);
-  };
-
   const handleGoogleLogin = async () => {
-    console.log('[LOGIN_DEBUG] 🌐 Iniciando Login com Google...');
+    setLoading(true);
+    console.log('[LOGIN] 🌐 Iniciando Google OAuth...');
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -40,8 +33,9 @@ const Login = () => {
       });
       if (error) throw error;
     } catch (error: any) {
-      console.error('[LOGIN_DEBUG] ❌ Erro Google:', error.message);
-      showError('Erro ao conectar com Google.');
+      console.error('[LOGIN] ❌ Erro Google:', error.message);
+      setErrorDetail(`Erro Google: ${error.message}`);
+      setLoading(false);
     }
   };
 
@@ -52,77 +46,57 @@ const Login = () => {
     setLoading(true);
     setErrorDetail(null);
     const cleanId = registrationId.trim();
-    const timestamp = () => new Date().toLocaleTimeString();
-
-    console.log(`[${timestamp()}] [LOGIN_DEBUG] 🏁 Início da tentativa para ID:`, cleanId);
 
     try {
-      // 1. Buscar e-mail (com timeout)
-      console.log(`[${timestamp()}] [LOGIN_DEBUG] 1️⃣ Consultando tabela 'users'...`);
-      let userData = null;
-      try {
-        const response = await withTimeout(
-          supabase
-            .from('users')
-            .select('email')
-            .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
-            .maybeSingle()
-        );
-        userData = response.data;
-        console.log(`[${timestamp()}] [LOGIN_DEBUG] ✅ Resposta da tabela 'users' recebida.`);
-      } catch (err: any) {
-        console.warn(`[${timestamp()}] [LOGIN_DEBUG] ⚠️ Falha ou Timeout na consulta 'users':`, err.message);
-        // Não travamos aqui, seguimos para o e-mail padrão
+      console.log('[LOGIN] 1️⃣ Verificando usuário...');
+      // Tentamos buscar o e-mail vinculado à matrícula
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('email')
+        .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
+        .maybeSingle();
+
+      if (userError) {
+        console.error('[LOGIN] ❌ Erro na tabela users:', userError);
+        // Se der erro de permissão (RLS), avisamos o usuário
+        if (userError.code === '42P01') throw new Error("Tabela 'users' não encontrada no banco.");
+        if (userError.code === 'PGRST301') throw new Error("Acesso negado pelo banco (RLS). Execute o SQL de permissões.");
       }
 
       const targetEmail = userData?.email || `${cleanId}@app.local`;
-      console.log(`[${timestamp()}] [LOGIN_DEBUG] 📧 E-mail definido:`, targetEmail);
 
-      // 2. Tentar Login Direto
-      console.log(`[${timestamp()}] [LOGIN_DEBUG] 2️⃣ Tentando autenticação...`);
+      console.log('[LOGIN] 2️⃣ Autenticando...');
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: password,
       });
 
       if (!signInError && signInData.session) {
-        console.log(`[${timestamp()}] [LOGIN_DEBUG] 🎉 Login realizado com sucesso!`);
-        showSuccess('Bem-vindo de volta!');
+        showSuccess('Bem-vindo!');
         navigate(from, { replace: true });
         return;
       }
 
-      console.log(`[${timestamp()}] [LOGIN_DEBUG] ℹ️ Login direto falhou, verificando lista branca...`);
+      console.log('[LOGIN] 3️⃣ Verificando Whitelist...');
+      const { data: whitelist, error: wlError } = await supabase
+        .from('registration_whitelist')
+        .select('*')
+        .eq('registration_id', cleanId)
+        .maybeSingle();
 
-      // 3. Verificar Whitelist (com timeout)
-      const { data: whitelistEntry, error: whitelistError } = await withTimeout(
-        supabase
-          .from('registration_whitelist')
-          .select('*')
-          .eq('registration_id', cleanId)
-          .maybeSingle()
-      );
+      if (wlError) throw new Error(`Erro na Whitelist: ${wlError.message}`);
+      if (!whitelist) throw new Error('Matrícula não autorizada.');
+      if (password !== whitelist.password) throw new Error('Senha incorreta.');
 
-      if (whitelistError) throw new Error(`Erro no banco: ${whitelistError.message}`);
-      
-      if (!whitelistEntry) {
-        throw new Error('Esta matrícula não está autorizada no sistema.');
-      }
-
-      if (password !== whitelistEntry.password) {
-        throw new Error('Senha incorreta para esta matrícula.');
-      }
-
-      // 4. Criar conta
-      console.log(`[${timestamp()}] [LOGIN_DEBUG] 4️⃣ Criando nova conta...`);
+      console.log('[LOGIN] 4️⃣ Criando conta...');
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: targetEmail,
         password: password,
         options: {
           data: {
-            name: whitelistEntry.name,
-            role: whitelistEntry.role,
-            [whitelistEntry.role === 'student' ? 'student_id' : 'teacher_id']: cleanId
+            name: whitelist.name,
+            role: whitelist.role,
+            [whitelist.role === 'student' ? 'student_id' : 'teacher_id']: cleanId
           }
         }
       });
@@ -130,16 +104,15 @@ const Login = () => {
       if (signUpError) throw signUpError;
       
       if (signUpData.session) {
-        showSuccess('Conta ativada com sucesso!');
+        showSuccess('Conta ativada!');
         navigate(from, { replace: true });
       } else {
-        showSuccess('Conta criada! Tente entrar novamente.');
+        showSuccess('Conta criada! Entre agora com sua senha.');
         setLoading(false);
       }
     } catch (error: any) {
-      console.error(`[${timestamp()}] [LOGIN_DEBUG] 🚨 Erro Crítico:`, error.message);
+      console.error('[LOGIN] 🚨 Erro:', error.message);
       setErrorDetail(error.message);
-      showError(error.message);
       setLoading(false);
     }
   };
@@ -157,27 +130,23 @@ const Login = () => {
         <Card className="border-none shadow-xl">
           <CardHeader>
             <CardTitle>Entrar</CardTitle>
-            <CardDescription>Use sua matrícula ou sua conta Google.</CardDescription>
+            <CardDescription>Use sua matrícula ou conta Google.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {errorDetail && (
-              <div className="bg-destructive/10 p-4 rounded-xl flex items-start gap-3 text-destructive text-sm animate-in fade-in slide-in-from-top-2">
+              <div className="bg-destructive/10 p-4 rounded-xl flex items-start gap-3 text-destructive text-sm">
                 <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-bold">Não foi possível entrar:</p>
+                  <p className="font-bold">Falha no acesso:</p>
                   <p className="text-xs opacity-80">{errorDetail}</p>
-                  {errorDetail.includes("Timeout") && (
-                    <p className="text-[10px] mt-2 flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> Tente recarregar a página ou verifique sua conexão.
-                    </p>
-                  )}
+                  <p className="text-[10px] mt-2 font-medium underline">Certifique-se de ter executado o SQL no Supabase.</p>
                 </div>
               </div>
             )}
 
             <Button 
               variant="outline" 
-              className="w-full h-12 rounded-xl gap-3 font-bold border-2 hover:bg-slate-50" 
+              className="w-full h-12 rounded-xl gap-3 font-bold border-2" 
               onClick={handleGoogleLogin}
               disabled={loading}
             >
@@ -188,44 +157,38 @@ const Login = () => {
             <div className="relative">
               <div className="absolute inset-0 flex items-center"><Separator /></div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Ou via matrícula</span>
+                <span className="bg-card px-2 text-muted-foreground">Ou matrícula</span>
               </div>
             </div>
 
             <form onSubmit={handleAuth} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="registration">Número de Matrícula</Label>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="registration"
-                    placeholder="Digite sua matrícula"
-                    value={registrationId}
-                    onChange={(e) => setRegistrationId(e.target.value)}
-                    required
-                    className="pl-10 rounded-xl font-mono"
-                    disabled={loading}
-                  />
-                </div>
+                <Label htmlFor="registration">Matrícula</Label>
+                <Input
+                  id="registration"
+                  placeholder="Sua matrícula"
+                  value={registrationId}
+                  onChange={(e) => setRegistrationId(e.target.value)}
+                  required
+                  className="rounded-xl font-mono"
+                  disabled={loading}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Sua senha"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="pl-10 rounded-xl"
-                    disabled={loading}
-                  />
-                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Sua senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="rounded-xl"
+                  disabled={loading}
+                />
               </div>
               <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg" disabled={loading}>
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Entrar no Sistema'}
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Entrar'}
               </Button>
             </form>
           </CardContent>
