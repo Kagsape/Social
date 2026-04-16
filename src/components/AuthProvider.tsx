@@ -28,8 +28,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   const fetchUserProfile = useCallback(async (userId: string, authUser?: User) => {
-    console.log(`%c[Auth:Profile] 🔄 Iniciando sincronização para: ${userId}`, 'color: #3b82f6; font-weight: bold');
-    
     try {
       // 1. Buscar perfil básico na tabela "users"
       let { data: profile, error: profileError } = await supabase
@@ -38,13 +36,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .maybeSingle();
 
-      if (profileError) {
-        console.error('[Auth:Profile] ❌ Erro ao buscar usuário:', profileError.message);
-      }
-
       // Fallback para criação automática se o perfil não existir
       if (!profile && authUser) {
-        console.warn('[Auth:Profile] ⚠️ Perfil não encontrado. Criando registro...');
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -60,30 +53,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!insertError) profile = newProfile;
       }
 
-      // 2. Buscar cargos (RBAC) em duas etapas para evitar travamentos de relacionamento
+      // 2. Buscar cargos (RBAC) - Silencioso se a tabela não existir
       let rolesList: string[] = [];
-      try {
-        const { data: userRolesData, error: urError } = await supabase
-          .from('user_roles')
-          .select('role_id')
-          .eq('user_id', userId);
+      const { data: userRolesData } = await supabase
+        .from('user_roles')
+        .select('role_id')
+        .eq('user_id', userId);
 
-        if (urError) throw urError;
-
-        if (userRolesData && userRolesData.length > 0) {
-          const roleIds = userRolesData.map(ur => ur.role_id);
-          const { data: rolesData, error: rError } = await supabase
-            .from('roles')
-            .select('name')
-            .in('id', roleIds);
-          
-          if (rError) throw rError;
-          rolesList = rolesData?.map(r => r.name) || [];
-        }
-      } catch (e: any) {
-        console.warn('[Auth:Profile] ⚠️ Falha ao buscar cargos RBAC:', e.message);
+      if (userRolesData && userRolesData.length > 0) {
+        const roleIds = userRolesData.map(ur => ur.role_id);
+        const { data: rolesData } = await supabase
+          .from('roles')
+          .select('name')
+          .in('id', roleIds);
+        
+        rolesList = rolesData?.map(r => r.name) || [];
       }
 
+      // Adiciona o cargo da coluna 'role' se não estiver na lista
       if (profile?.role && !rolesList.includes(profile.role)) {
         rolesList.push(profile.role);
       }
@@ -92,27 +79,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (profile) {
         let mergedPermissions = {};
-        try {
-          if (rolesList.length > 0) {
-            const { data: permissionsData } = await supabase
-              .from('roles')
-              .select('permissions')
-              .in('name', rolesList);
-            
-            mergedPermissions = permissionsData?.reduce((acc, curr) => ({
-              ...acc,
-              ...(curr.permissions || {})
-            }), {}) || {};
-          }
-        } catch (e: any) {
-          console.warn('[Auth:Profile] ⚠️ Erro ao carregar permissões:', e.message);
+        if (rolesList.length > 0) {
+          const { data: permissionsData } = await supabase
+            .from('roles')
+            .select('permissions')
+            .in('name', rolesList);
+          
+          mergedPermissions = permissionsData?.reduce((acc, curr) => ({
+            ...acc,
+            ...(curr.permissions || {})
+          }), {}) || {};
         }
 
         setUserProfile({ ...profile, permissions: mergedPermissions });
-        console.log('%c[Auth:Profile] ✅ Sincronização concluída.', 'color: #10b981; font-weight: bold');
       }
     } catch (err) {
-      console.error('[Auth:Profile] 💥 Erro crítico no fetchUserProfile:', err);
+      console.error('[Auth:Profile] Erro ao carregar perfil:', err);
     }
   }, []);
 
@@ -152,8 +134,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(null);
           setUserProfile(null);
           setRoles([]);
-          setLoading(false);
-        } else if (event === 'INITIAL_SESSION' && !currentSession) {
           setLoading(false);
         }
       }

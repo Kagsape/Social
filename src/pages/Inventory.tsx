@@ -22,6 +22,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -268,6 +269,9 @@ const Inventory = () => {
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>{editingItem ? 'Editar Item' : 'Novo Equipamento'}</DialogTitle>
+              <DialogDescription>
+                {editingItem ? 'Atualize as informações do equipamento selecionado.' : 'Preencha os dados para cadastrar um novo equipamento no inventário.'}
+              </DialogDescription>
             </DialogHeader>
             <InventoryForm item={editingItem} onSuccess={() => { setIsItemDialogOpen(false); fetchItems(); }} />
           </DialogContent>
@@ -278,6 +282,9 @@ const Inventory = () => {
             <form onSubmit={handleAddComputer}>
               <DialogHeader>
                 <DialogTitle>Novo Computador</DialogTitle>
+                <DialogDescription>
+                  Adicione uma nova estação de trabalho ao laboratório de informática.
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
