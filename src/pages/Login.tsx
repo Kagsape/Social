@@ -5,8 +5,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { LayoutDashboard, ArrowLeft, Hash, Lock, Loader2, ShieldCheck, Chrome } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Hash, Lock, Loader2, ArrowLeft, Chrome, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import { Separator } from '@/components/ui/separator';
@@ -17,72 +17,74 @@ const Login = () => {
   const [registrationId, setRegistrationId] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   const from = (location.state as any)?.from?.pathname || '/feed';
-
-  const handleGoogleLogin = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-      if (error) throw error;
-    } catch (error: any) {
-      showError('Erro ao conectar com Google.');
-    }
-  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!registrationId.trim() || !password.trim()) return;
     
     setLoading(true);
+    setErrorDetail(null);
     const cleanId = registrationId.trim();
 
+    // Timeout local para o login (15 segundos)
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        setLoading(false);
+        setErrorDetail("A conexão com o servidor expirou. Verifique sua internet.");
+        showError("Tempo de resposta esgotado.");
+      }
+    }, 15000);
+
     try {
-      // 1. Tenta encontrar o e-mail associado a esta matrícula
+      console.log('[Login] Iniciando autenticação para:', cleanId);
+
+      // 1. Buscar e-mail na tabela de usuários
       const { data: userData, error: userQueryError } = await supabase
         .from('users')
         .select('email')
         .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
         .maybeSingle();
 
+      if (userQueryError) {
+        console.error('[Login] Erro na busca de usuário:', userQueryError);
+      }
+
       const targetEmail = userData?.email || `${cleanId}@app.local`;
 
-      // 2. Tenta Login normal
+      // 2. Tentar Login
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: password,
       });
 
       if (!signInError && signInData.session) {
+        clearTimeout(timeoutId);
         showSuccess('Bem-vindo de volta!');
         navigate(from, { replace: true });
         return;
       }
 
-      // 3. Se falhou (usuário não existe ou senha errada), verificamos a Whitelist
+      // 3. Se falhou, verificar Whitelist para primeiro acesso
       const { data: whitelistEntry, error: whitelistError } = await supabase
         .from('registration_whitelist')
         .select('*')
         .eq('registration_id', cleanId)
         .maybeSingle();
 
-      if (whitelistError) throw new Error('Erro ao validar matrícula no servidor.');
+      if (whitelistError) throw new Error(`Erro ao validar na lista branca: ${whitelistError.message}`);
       
       if (!whitelistEntry) {
-        throw new Error('Matrícula não encontrada na lista de autorizados.');
+        throw new Error('Esta matrícula não está autorizada no sistema. Procure a secretaria.');
       }
 
-      // Validar senha da lista branca para o primeiro acesso
       if (password !== whitelistEntry.password) {
         throw new Error('Senha incorreta para esta matrícula.');
       }
 
-      // Se chegou aqui, é o primeiro acesso e a senha da whitelist está correta
-      // Criamos a conta no Supabase Auth
+      // 4. Primeiro acesso: Criar conta
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: targetEmail,
         password: password,
@@ -95,62 +97,48 @@ const Login = () => {
         }
       });
 
-      if (signUpError) {
-        // Se o erro for que o usuário já existe, mas a senha estava errada no passo 2
-        if (signUpError.message.includes('already registered')) {
-          throw new Error('Esta matrícula já possui uma conta, mas a senha informada está incorreta.');
-        }
-        throw signUpError;
-      }
+      if (signUpError) throw signUpError;
       
       if (signUpData.session) {
+        clearTimeout(timeoutId);
         showSuccess('Conta ativada com sucesso!');
         navigate(from, { replace: true });
       } else {
-        showSuccess('Conta criada! Por favor, tente entrar novamente.');
+        showSuccess('Conta criada! Tente entrar novamente.');
         setLoading(false);
       }
     } catch (error: any) {
-      console.error('[Login] Erro:', error);
-      showError(error.message || 'Erro ao acessar o sistema.');
+      console.error('[Login] Erro capturado:', error);
+      setErrorDetail(error.message);
+      showError(error.message);
       setLoading(false);
     } finally {
-      // O loading só é desativado se não houver navegação
+      clearTimeout(timeoutId);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-8">
             <ArrowLeft className="h-4 w-4" /> Início
           </Link>
           <h2 className="text-3xl font-bold tracking-tight">Acesso ao Portal</h2>
-          <p className="text-muted-foreground mt-2">CIEP 165 Brigadeiro Sérgio Carvalho</p>
         </div>
 
         <Card className="border-none shadow-xl">
           <CardHeader>
             <CardTitle>Entrar</CardTitle>
-            <CardDescription>Use sua matrícula e a senha definida pelo administrador.</CardDescription>
+            <CardDescription>Use sua matrícula e senha autorizada.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <Button 
-              variant="outline" 
-              className="w-full h-12 rounded-xl gap-3 font-bold" 
-              onClick={handleGoogleLogin}
-            >
-              <Chrome className="h-5 w-5 text-red-500" />
-              Entrar com Google
-            </Button>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center"><Separator /></div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Ou via matrícula</span>
+            {errorDetail && (
+              <div className="bg-destructive/10 p-4 rounded-xl flex items-start gap-3 text-destructive text-sm animate-in fade-in slide-in-from-top-2">
+                <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                <p><strong>Erro:</strong> {errorDetail}</p>
               </div>
-            </div>
+            )}
 
             <form onSubmit={handleAuth} className="space-y-4">
               <div className="space-y-2">
