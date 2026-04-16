@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Hash, Lock, Loader2, ArrowLeft, Chrome, AlertCircle } from 'lucide-react';
+import { Hash, Lock, Loader2, ArrowLeft, Chrome } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Separator } from '@/components/ui/separator';
@@ -14,17 +14,17 @@ import { useAuth } from '@/components/AuthProvider';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [registrationId, setRegistrationId] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Se o AuthProvider detectar que o usuário logou, redireciona automaticamente
+  // Redireciona apenas quando o loading terminar E o perfil estiver carregado
   useEffect(() => {
-    if (user) {
+    if (!authLoading && user && userProfile) {
       navigate('/feed', { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, userProfile, authLoading, navigate]);
 
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
@@ -41,7 +41,6 @@ const Login = () => {
     setSubmitting(true);
 
     try {
-      // 1. Apenas valida se a matrícula existe na whitelist e pega o e-mail/dados
       const { data: whitelist, error: wlError } = await supabase
         .from('registration_whitelist')
         .select('*')
@@ -52,16 +51,13 @@ const Login = () => {
       if (!whitelist) throw new Error("Matrícula não encontrada na lista de autorizados.");
       if (password !== whitelist.password) throw new Error("Senha incorreta para esta matrícula.");
 
-      // E-mail virtual baseado no ID para garantir unicidade no Auth
       const targetEmail = `${cleanId}@ciep165.app`;
 
-      // 2. Tenta entrar
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: password,
       });
 
-      // 3. Se não existir no Auth (primeiro acesso), cria a conta
       if (signInError && signInError.message.includes("Invalid login credentials")) {
         const { error: signUpError } = await supabase.auth.signUp({
           email: targetEmail,
@@ -78,9 +74,6 @@ const Login = () => {
       } else if (signInError) {
         throw signInError;
       }
-
-      // NOTA: Não chamamos navigate() aqui. 
-      // O AuthProvider detectará o evento SIGNED_IN e o useEffect acima fará o redirecionamento.
       
     } catch (error: any) {
       showError(error.message);
