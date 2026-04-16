@@ -55,16 +55,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!insertError) profile = newProfile;
       }
 
-      if (profileError) console.error('[Auth:Profile] Erro users:', profileError.message);
+      // 3. Buscar cargos (RBAC) - Usamos try/catch interno para não travar se a tabela não existir
+      let rolesList: string[] = [];
+      try {
+        const { data: userRoles } = await supabase
+          .from('user_roles')
+          .select('roles(name)')
+          .eq('user_id', userId);
+        
+        rolesList = userRoles?.map((ur: any) => ur.roles?.name).filter(Boolean) || [];
+      } catch (e) {
+        console.warn('[Auth:Roles] Tabela user_roles inacessível.');
+      }
 
-      // 3. Buscar cargos na tabela de relacionamento (RBAC)
-      const { data: userRoles } = await supabase
-        .from('user_roles')
-        .select('roles(name)')
-        .eq('user_id', userId);
-
-      // 4. Mesclar cargos
-      const rolesList = userRoles?.map((ur: any) => ur.roles?.name).filter(Boolean) || [];
+      // Mesclar cargo do perfil se não estiver na lista
       if (profile?.role && !rolesList.includes(profile.role)) {
         rolesList.push(profile.role);
       }
@@ -72,21 +76,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setRoles(rolesList);
 
       if (profile) {
-        // 5. Buscar permissões detalhadas
-        const { data: roleData } = await supabase
-          .from('roles')
-          .select('permissions')
-          .in('name', rolesList);
-        
-        const mergedPermissions = roleData?.reduce((acc, curr) => ({
-          ...acc,
-          ...(curr.permissions || {})
-        }), {}) || {};
+        // 4. Buscar permissões
+        let mergedPermissions = {};
+        try {
+          const { data: roleData } = await supabase
+            .from('roles')
+            .select('permissions')
+            .in('name', rolesList);
+          
+          mergedPermissions = roleData?.reduce((acc, curr) => ({
+            ...acc,
+            ...(curr.permissions || {})
+          }), {}) || {};
+        } catch (e) {
+          console.warn('[Auth:Permissions] Tabela roles inacessível.');
+        }
 
         setUserProfile({ ...profile, permissions: mergedPermissions });
       }
     } catch (err) {
-      console.error('[Auth:Profile] Erro crítico:', err);
+      console.error('[Auth:Profile] Erro crítico na sincronização:', err);
     }
   }, []);
 
@@ -96,13 +105,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initialize = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        if (mounted && initialSession) {
-          setSession(initialSession);
-          setUser(initialSession.user);
-          await fetchUserProfile(initialSession.user.id, initialSession.user);
+        if (mounted) {
+          if (initialSession) {
+            setSession(initialSession);
+            setUser(initialSession.user);
+            await fetchUserProfile(initialSession.user.id, initialSession.user);
+          }
         }
       } catch (error) {
-        console.error('[Auth:Init] Erro:', error);
+        console.error('[Auth:Init] Erro na inicialização:', error);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -112,16 +123,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        console.log(`[Auth:Event] ${event}`);
+        
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
-          if (currentSession?.user) await fetchUserProfile(currentSession.user.id, currentSession.user);
+          if (currentSession?.user) {
+            await fetchUserProfile(currentSession.user.id, currentSession.user);
+          }
           setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
           setUserProfile(null);
           setRoles([]);
+          setLoading(false);
+        } else if (event === 'INITIAL_SESSION' && !currentSession) {
           setLoading(false);
         }
       }
@@ -138,6 +155,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(true);
       await supabase.auth.signOut();
     } catch (error) {
+      console.error('[Auth:SignOut] Erro:', error);
+    } finally {
       setLoading(false);
     }
   };
