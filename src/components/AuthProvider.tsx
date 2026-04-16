@@ -29,9 +29,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = useCallback(async (userId: string, authUser?: User) => {
     console.log(`%c[Auth:Profile] 🔄 Iniciando sincronização para: ${userId}`, 'color: #3b82f6; font-weight: bold');
+    
     try {
-      // 1. Buscar perfil básico
-      console.log('[Auth:Profile] 🔍 Buscando na tabela "users"...');
+      // 1. Buscar perfil básico na tabela "users"
       let { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
@@ -42,9 +42,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('[Auth:Profile] ❌ Erro ao buscar usuário:', profileError.message);
       }
 
-      // 2. Fallback para usuários sem registro na tabela users
+      // Fallback para criação automática se o perfil não existir
       if (!profile && authUser) {
-        console.warn('[Auth:Profile] ⚠️ Perfil não encontrado no banco. Tentando criar registro automático...');
+        console.warn('[Auth:Profile] ⚠️ Perfil não encontrado. Criando registro...');
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -57,64 +57,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select()
           .single();
         
-        if (insertError) {
-          console.error('[Auth:Profile] ❌ Falha ao criar perfil automático:', insertError.message);
-        } else {
-          console.log('[Auth:Profile] ✅ Perfil automático criado com sucesso.');
-          profile = newProfile;
-        }
+        if (!insertError) profile = newProfile;
       }
 
-      // 3. Buscar cargos (RBAC)
-      console.log('[Auth:Profile] 🔍 Buscando cargos (RBAC)...');
+      // 2. Buscar cargos (RBAC) em duas etapas para evitar travamentos de relacionamento
       let rolesList: string[] = [];
       try {
-        const { data: userRoles, error: rolesError } = await supabase
+        // Etapa A: Buscar IDs de cargos na tabela de ligação
+        const { data: userRolesData, error: urError } = await supabase
           .from('user_roles')
-          .select('roles(name)')
+          .select('role_id')
           .eq('user_id', userId);
-        
-        if (rolesError) throw rolesError;
-        rolesList = userRoles?.map((ur: any) => ur.roles?.name).filter(Boolean) || [];
-        console.log('[Auth:Profile] 🎭 Cargos encontrados via RBAC:', rolesList);
+
+        if (urError) throw urError;
+
+        if (userRolesData && userRolesData.length > 0) {
+          const roleIds = userRolesData.map(ur => ur.role_id);
+          
+          // Etapa B: Buscar nomes dos cargos na tabela roles
+          const { data: rolesData, error: rError } = await supabase
+            .from('roles')
+            .select('name')
+            .in('id', roleIds);
+          
+          if (rError) throw rError;
+          rolesList = rolesData?.map(r => r.name) || [];
+        }
       } catch (e: any) {
-        console.warn('[Auth:Profile] ⚠️ Tabela user_roles inacessível ou erro:', e.message);
+        console.warn('[Auth:Profile] ⚠️ Falha ao buscar cargos RBAC:', e.message);
       }
 
-      // Mesclar cargo fixo do perfil
+      // Mesclar cargo fixo da coluna 'role' do perfil
       if (profile?.role && !rolesList.includes(profile.role)) {
         rolesList.push(profile.role);
-        console.log('[Auth:Profile] ➕ Cargo do perfil mesclado:', profile.role);
       }
       
       setRoles(rolesList);
 
+      // 3. Buscar permissões baseadas nos cargos encontrados
       if (profile) {
-        // 4. Buscar permissões
-        console.log('[Auth:Profile] 🔍 Mapeando permissões detalhadas...');
         let mergedPermissions = {};
         try {
-          const { data: roleData } = await supabase
-            .from('roles')
-            .select('permissions')
-            .in('name', rolesList);
-          
-          mergedPermissions = roleData?.reduce((acc, curr) => ({
-            ...acc,
-            ...(curr.permissions || {})
-          }), {}) || {};
-          console.log('[Auth:Profile] 🛡️ Permissões carregadas:', Object.keys(mergedPermissions).length);
+          if (rolesList.length > 0) {
+            const { data: permissionsData } = await supabase
+              .from('roles')
+              .select('permissions')
+              .in('name', rolesList);
+            
+            mergedPermissions = permissionsData?.reduce((acc, curr) => ({
+              ...acc,
+              ...(curr.permissions || {})
+            }), {}) || {};
+          }
         } catch (e: any) {
           console.warn('[Auth:Profile] ⚠️ Erro ao carregar permissões:', e.message);
         }
 
         setUserProfile({ ...profile, permissions: mergedPermissions });
-        console.log('%c[Auth:Profile] ✅ Sincronização concluída com sucesso.', 'color: #10b981; font-weight: bold');
-      } else {
-        console.error('[Auth:Profile] ❌ Falha crítica: Perfil não pôde ser carregado nem criado.');
+        console.log('%c[Auth:Profile] ✅ Sincronização concluída.', 'color: #10b981; font-weight: bold');
       }
     } catch (err) {
-      console.error('[Auth:Profile] 💥 Erro catastrófico na sincronização:', err);
+      console.error('[Auth:Profile] 💥 Erro crítico no fetchUserProfile:', err);
     }
   }, []);
 
@@ -122,31 +125,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initialize = async () => {
-      console.log('%c[Auth:Init] 🚀 Inicializando AuthProvider...', 'color: #8b5cf6; font-weight: bold');
       try {
-        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('[Auth:Init] ❌ Erro ao recuperar sessão inicial:', sessionError.message);
-        }
-
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (mounted) {
           if (initialSession) {
-            console.log('[Auth:Init] 🔑 Sessão ativa encontrada para:', initialSession.user.email);
             setSession(initialSession);
             setUser(initialSession.user);
             await fetchUserProfile(initialSession.user.id, initialSession.user);
-          } else {
-            console.log('[Auth:Init] ℹ️ Nenhuma sessão ativa encontrada.');
           }
         }
       } catch (error) {
-        console.error('[Auth:Init] ❌ Erro inesperado na inicialização:', error);
+        console.error('[Auth:Init] Erro:', error);
       } finally {
-        if (mounted) {
-          console.log('[Auth:Init] 🏁 Finalizando estado de carregamento.');
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
     };
 
@@ -154,8 +145,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log(`%c[Auth:Event] 🔔 Evento: ${event}`, 'color: #f59e0b; font-weight: bold');
-        
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
@@ -164,7 +153,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           setLoading(false);
         } else if (event === 'SIGNED_OUT') {
-          console.log('[Auth:Event] 🚪 Usuário saiu do sistema.');
           setSession(null);
           setUser(null);
           setUserProfile(null);
@@ -183,18 +171,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchUserProfile]);
 
   const signOut = async () => {
-    console.log('[Auth:Action] 📤 Iniciando logout...');
     try {
       setLoading(true);
       await supabase.auth.signOut();
     } catch (error) {
-      console.error('[Auth:Action] ❌ Erro ao sair:', error);
       setLoading(false);
     }
   };
 
   const refreshProfile = async () => {
-    console.log('[Auth:Action] 🔄 Atualizando perfil manualmente...');
     if (user) await fetchUserProfile(user.id, user);
   };
 
