@@ -59,8 +59,12 @@ const AdminWhitelistPage = () => {
       
       setWhitelist(data || []);
       setTableExists(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao buscar whitelist:', error);
+      // Se o erro for especificamente sobre a coluna password, avisamos o usuário
+      if (error.message?.includes('password')) {
+        showError('A coluna "password" ainda não foi detectada. Execute o SQL e aguarde alguns minutos.');
+      }
     } finally {
       setLoading(false);
     }
@@ -96,6 +100,7 @@ const AdminWhitelistPage = () => {
       setNewPassword('');
       fetchWhitelist();
     } catch (error: any) {
+      console.error('Erro ao adicionar:', error);
       showError(error.message || 'Erro ao adicionar à lista.');
     } finally {
       setSubmitting(false);
@@ -248,9 +253,11 @@ const AdminWhitelistPage = () => {
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-mono text-muted-foreground">ID: {item.registration_id}</span>
                               <Badge variant="outline" className="text-[10px] h-4 px-1 capitalize">{item.role}</Badge>
-                              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                <Lock className="h-2 w-2" /> {item.password}
-                              </span>
+                              {item.password && (
+                                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                  <Lock className="h-2 w-2" /> {item.password}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
