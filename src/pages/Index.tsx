@@ -16,8 +16,8 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [labStatus, setLabStatus] = useState({ total: 0, working: 0, inUse: 0 });
 
+  // Memorizamos a função para que ela não mude a cada renderização
   const fetchLabStatus = useCallback(async () => {
-    console.log('[Lab:Status] 🔍 Atualizando status do laboratório...');
     try {
       // 1. Buscar todos os computadores
       const { data: computers, error: compError } = await supabase
@@ -26,7 +26,7 @@ const Index = () => {
       
       if (compError) throw compError;
 
-      // 2. Buscar reservas em andamento (uso real)
+      // 2. Buscar reservas em andamento
       const { data: activeUsage, error: usageError } = await supabase
         .from('lab_usage')
         .select('computer_id')
@@ -39,8 +39,6 @@ const Index = () => {
         const working = computers.filter(c => c.status === 'working').length;
         const inUse = activeUsage?.length || 0;
         
-        console.log(`[Lab:Status] 📊 Dados: Total=${total}, Funcionando=${working}, Em Uso=${inUse}`);
-        
         setLabStatus({
           total,
           working,
@@ -48,7 +46,7 @@ const Index = () => {
         });
       }
     } catch (error: any) {
-      console.error('[Lab:Status] ❌ Erro ao buscar status:', error.message);
+      console.error('[Lab:Status] Erro ao buscar status:', error.message);
     }
   }, []);
 
@@ -56,7 +54,7 @@ const Index = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        console.log('[Index] 🚀 Carregando dados da página inicial...');
+        // Busca cursos em destaque
         const { data: courses } = await supabase
           .from('courses')
           .select(`
@@ -72,9 +70,11 @@ const Index = () => {
         }));
         
         setFeaturedCourses(processed);
+        
+        // Busca status do laboratório
         await fetchLabStatus();
       } catch (error) {
-        console.error('[Index] ❌ Erro ao carregar dados:', error);
+        console.error('[Index] Erro ao carregar dados:', error);
       } finally {
         setLoading(false);
       }
@@ -82,15 +82,13 @@ const Index = () => {
 
     fetchData();
 
-    // Inscrição em tempo real
+    // Inscrição em tempo real para mudanças no laboratório
     const computersChannel = supabase
-      .channel('lab_changes')
+      .channel('lab_changes_index')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lab_computers' }, () => {
-        console.log('[Lab:Realtime] 🔔 Mudança detectada em lab_computers');
         fetchLabStatus();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lab_usage' }, () => {
-        console.log('[Lab:Realtime] 🔔 Mudança detectada em lab_usage');
         fetchLabStatus();
       })
       .subscribe();
@@ -98,7 +96,7 @@ const Index = () => {
     return () => {
       supabase.removeChannel(computersChannel);
     };
-  }, [fetchLabStatus]);
+  }, [fetchLabStatus]); // Agora fetchLabStatus é estável e não causa loops
 
   const freeComputers = Math.max(0, labStatus.working - labStatus.inUse);
   const reservationLink = userProfile?.role === 'teacher' ? '/teacher' : '/dashboard';
