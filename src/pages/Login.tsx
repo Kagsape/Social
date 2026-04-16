@@ -42,8 +42,8 @@ const Login = () => {
     const cleanId = registrationId.trim();
 
     try {
-      // 1. Buscar o e-mail atual associado a esta matrícula
-      const { data: userData } = await supabase
+      // 1. Tenta encontrar o e-mail associado a esta matrícula
+      const { data: userData, error: userQueryError } = await supabase
         .from('users')
         .select('email')
         .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
@@ -51,7 +51,7 @@ const Login = () => {
 
       const targetEmail = userData?.email || `${cleanId}@app.local`;
 
-      // 2. Tentar Login normal
+      // 2. Tenta Login normal
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: password,
@@ -63,51 +63,59 @@ const Login = () => {
         return;
       }
 
-      // 3. Se falhou e o usuário não existe no Auth, verificamos a Whitelist para o 1º acesso
-      if (signInError?.message === 'Invalid login credentials' && !userData) {
-        const { data: whitelistEntry, error: whitelistError } = await supabase
-          .from('registration_whitelist')
-          .select('*')
-          .eq('registration_id', cleanId)
-          .maybeSingle();
+      // 3. Se falhou (usuário não existe ou senha errada), verificamos a Whitelist
+      const { data: whitelistEntry, error: whitelistError } = await supabase
+        .from('registration_whitelist')
+        .select('*')
+        .eq('registration_id', cleanId)
+        .maybeSingle();
 
-        if (whitelistError) throw new Error('Erro ao validar matrícula.');
-        
-        if (!whitelistEntry) {
-          throw new Error('Matrícula não autorizada na lista branca.');
-        }
+      if (whitelistError) throw new Error('Erro ao validar matrícula no servidor.');
+      
+      if (!whitelistEntry) {
+        throw new Error('Matrícula não encontrada na lista de autorizados.');
+      }
 
-        // VALIDAR SENHA DA LISTA BRANCA
-        if (password !== whitelistEntry.password) {
-          throw new Error('Senha incorreta para esta matrícula. Verifique com o administrador.');
-        }
+      // Validar senha da lista branca para o primeiro acesso
+      if (password !== whitelistEntry.password) {
+        throw new Error('Senha incorreta para esta matrícula.');
+      }
 
-        // Criar a conta com a senha fornecida (que agora sabemos que é a correta da whitelist)
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: targetEmail,
-          password: password,
-          options: {
-            data: {
-              name: whitelistEntry.name,
-              role: whitelistEntry.role,
-              [whitelistEntry.role === 'student' ? 'student_id' : 'teacher_id']: cleanId
-            }
+      // Se chegou aqui, é o primeiro acesso e a senha da whitelist está correta
+      // Criamos a conta no Supabase Auth
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: targetEmail,
+        password: password,
+        options: {
+          data: {
+            name: whitelistEntry.name,
+            role: whitelistEntry.role,
+            [whitelistEntry.role === 'student' ? 'student_id' : 'teacher_id']: cleanId
           }
-        });
-
-        if (signUpError) throw signUpError;
-        
-        if (signUpData.session) {
-          showSuccess('Conta criada com sucesso!');
-          navigate(from, { replace: true });
         }
+      });
+
+      if (signUpError) {
+        // Se o erro for que o usuário já existe, mas a senha estava errada no passo 2
+        if (signUpError.message.includes('already registered')) {
+          throw new Error('Esta matrícula já possui uma conta, mas a senha informada está incorreta.');
+        }
+        throw signUpError;
+      }
+      
+      if (signUpData.session) {
+        showSuccess('Conta ativada com sucesso!');
+        navigate(from, { replace: true });
       } else {
-        throw signInError || new Error('Credenciais inválidas.');
+        showSuccess('Conta criada! Por favor, tente entrar novamente.');
+        setLoading(false);
       }
     } catch (error: any) {
-      showError(error.message || 'Erro ao acessar.');
-    } finally {
+      console.error('[Login] Erro:', error);
+      showError(error.message || 'Erro ao acessar o sistema.');
       setLoading(false);
+    } finally {
+      // O loading só é desativado se não houver navegação
     }
   };
 
@@ -156,6 +164,7 @@ const Login = () => {
                     onChange={(e) => setRegistrationId(e.target.value)}
                     required
                     className="pl-10 rounded-xl font-mono"
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -171,6 +180,7 @@ const Login = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     className="pl-10 rounded-xl"
+                    disabled={loading}
                   />
                 </div>
               </div>

@@ -30,6 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserProfile = useCallback(async (userId: string, authUser?: User) => {
     console.log('[Auth] Buscando perfil para:', userId);
     try {
+      // Busca o perfil básico
       let { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
@@ -40,10 +41,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('[Auth] Erro ao buscar perfil:', profileError.message);
       }
 
-      // Criação automática do perfil na tabela 'users' se não existir
+      // Se não existir perfil mas o usuário está autenticado, tenta criar (auto-provisionamento)
       if (!profile && authUser) {
-        console.log('[Auth] Perfil não encontrado, criando...');
+        console.log('[Auth] Perfil não encontrado, tentando criar...');
         const metadata = authUser.user_metadata;
+        
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -56,15 +58,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             avatar_url: metadata?.avatar_url
           })
           .select()
-          .single();
+          .maybeSingle();
         
-        if (insertError) {
-          console.error('[Auth] Erro ao criar perfil:', insertError.message);
-        } else {
+        if (!insertError && newProfile) {
           profile = newProfile;
         }
       }
 
+      // Busca roles adicionais (opcional, não deve travar o login)
       let rolesList: string[] = [];
       try {
         const { data: userRolesData } = await supabase
@@ -85,13 +86,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('[Auth] Erro ao buscar roles extras:', roleErr);
       }
 
+      // Adiciona a role principal do perfil à lista
       if (profile?.role && !rolesList.includes(profile.role)) {
         rolesList.push(profile.role);
       }
       
       setRoles(rolesList);
       setUserProfile(profile || null);
-      console.log('[Auth] Perfil carregado com sucesso');
     } catch (err) {
       console.error('[Auth:Profile] Erro crítico:', err);
     }
@@ -101,29 +102,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initialize = async () => {
-      console.log('[Auth] Inicializando sessão...');
       try {
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
         
-        if (error) {
-          console.error('[Auth] Erro ao obter sessão inicial:', error.message);
-        }
-
         if (mounted) {
           if (initialSession) {
-            console.log('[Auth] Sessão encontrada');
             setSession(initialSession);
             setUser(initialSession.user);
             await fetchUserProfile(initialSession.user.id, initialSession.user);
-          } else {
-            console.log('[Auth] Nenhuma sessão ativa');
           }
         }
       } catch (error) {
         console.error('[Auth:Init] Erro inesperado:', error);
       } finally {
         if (mounted) {
-          console.log('[Auth] Finalizando estado de carregamento');
           setLoading(false);
         }
       }
@@ -133,40 +125,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log('[Auth] Evento de mudança:', event);
-        if (mounted) {
-          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            setSession(currentSession);
-            setUser(currentSession?.user ?? null);
-            if (currentSession?.user) {
-              await fetchUserProfile(currentSession.user.id, currentSession.user);
-            }
-            setLoading(false);
-          } else if (event === 'SIGNED_OUT') {
-            setSession(null);
-            setUser(null);
-            setUserProfile(null);
-            setRoles([]);
-            setLoading(false);
+        if (!mounted) return;
+
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          if (currentSession?.user) {
+            await fetchUserProfile(currentSession.user.id, currentSession.user);
           }
+          setLoading(false);
+        } else if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUser(null);
+          setUserProfile(null);
+          setRoles([]);
+          setLoading(false);
         }
       }
     );
 
-    // Timeout de segurança: se em 10 segundos não carregar, libera a tela
+    // Timeout de segurança para garantir que o loading suma em no máximo 8 segundos
     const safetyTimeout = setTimeout(() => {
       if (mounted && loading) {
-        console.warn('[Auth] Timeout de segurança atingido. Forçando fim do carregamento.');
         setLoading(false);
       }
-    }, 10000);
+    }, 8000);
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
       clearTimeout(safetyTimeout);
     };
-  }, [fetchUserProfile]);
+  }, [fetchUserProfile, loading]);
 
   const signOut = async () => {
     try {
