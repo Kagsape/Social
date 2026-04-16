@@ -25,27 +25,34 @@ const Login = () => {
     
     setLoading(true);
     const cleanId = registrationId.trim();
-    const dummyEmail = `${cleanId}@app.local`;
 
     try {
-      // 1. Tentar Login Direto
+      // 1. Buscar o e-mail atual associado a esta matrícula na tabela pública
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('email')
+        .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
+        .maybeSingle();
+
+      // Se o usuário já existe, usamos o e-mail que está no banco (pode ter sido alterado)
+      // Se não existe, usamos o padrão dummy para o primeiro acesso
+      const targetEmail = userData?.email || `${cleanId}@app.local`;
+
+      // 2. Tentar Login
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: dummyEmail,
+        email: targetEmail,
         password: password,
       });
 
-      // Se logou com sucesso, redireciona
       if (!signInError && signInData.session) {
         showSuccess('Bem-vindo de volta!');
         navigate(from, { replace: true });
         return;
       }
 
-      // 2. Se o erro for "Invalid login credentials", pode ser que o usuário não exista
-      // ou a senha esteja errada. Vamos verificar a Whitelist.
-      if (signInError?.message === 'Invalid login credentials') {
+      // 3. Se falhou e o usuário não existe, tentamos o fluxo de criação automática (Whitelist)
+      if (signInError?.message === 'Invalid login credentials' && !userData) {
         
-        // Verificar se a matrícula existe na Whitelist
         const { data: whitelistEntry, error: whitelistError } = await supabase
           .from('registration_whitelist')
           .select('*')
@@ -58,21 +65,9 @@ const Login = () => {
           throw new Error('Matrícula não encontrada na lista de autorizados.');
         }
 
-        // Verificar se o usuário já existe na tabela 'users'
-        // Se existe e o login falhou acima, a senha está errada.
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('id')
-          .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
-          .maybeSingle();
-
-        if (existingUser) {
-          throw new Error('Senha incorreta para esta matrícula.');
-        }
-
-        // 3. Criação Automática (Primeiro Acesso)
+        // Criação Automática (Primeiro Acesso)
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: dummyEmail,
+          email: targetEmail,
           password: password,
           options: {
             data: {
@@ -92,7 +87,7 @@ const Login = () => {
           showSuccess('Conta criada! Por favor, tente entrar agora.');
         }
       } else {
-        throw signInError;
+        throw signInError || new Error('Credenciais inválidas.');
       }
 
     } catch (error: any) {

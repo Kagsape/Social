@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
-import { User, Camera, Save, LogOut, Loader2, MapPin, FileText, Hash, Lock } from 'lucide-react';
+import { User, Camera, Save, LogOut, Loader2, MapPin, FileText, Hash, Lock, Mail } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 const Profile = () => {
   const { user, userProfile, refreshProfile, signOut } = useAuth();
@@ -20,7 +21,9 @@ const Profile = () => {
   const [bio, setBio] = useState('');
   const [location, setLocation] = useState('');
   const [displayId, setDisplayId] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -30,6 +33,7 @@ const Profile = () => {
       setBio(userProfile.bio || '');
       setLocation(userProfile.location || '');
       setDisplayId(userProfile.student_id || userProfile.teacher_id || '');
+      setNewEmail(userProfile.email || '');
     }
   }, [userProfile]);
 
@@ -55,10 +59,26 @@ const Profile = () => {
       await refreshProfile();
       showSuccess('Perfil atualizado com sucesso!');
     } catch (error: any) {
-      console.error('Erro ao atualizar perfil:', error);
       showError(error.message || 'Erro ao atualizar perfil.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail.trim() || newEmail === userProfile?.email) return;
+
+    setEmailLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
+      if (error) throw error;
+
+      showSuccess('Link de confirmação enviado para o novo e-mail!');
+    } catch (error: any) {
+      showError(error.message || 'Erro ao solicitar alteração de e-mail.');
+    } finally {
+      setEmailLoading(false);
     }
   };
 
@@ -93,7 +113,7 @@ const Profile = () => {
               <div className="text-center">
                 <h2 className="text-2xl font-bold">{name || 'Usuário'}</h2>
                 <div className="flex flex-col items-center gap-1">
-                  <p className="text-muted-foreground">{user?.email}</p>
+                  <p className="text-muted-foreground">{userProfile?.email}</p>
                   <div className="flex gap-2 mt-1">
                     <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase">
                       {userProfile?.role === 'student' ? 'Aluno' : userProfile?.role === 'teacher' ? 'Professor' : 'Admin'}
@@ -148,7 +168,6 @@ const Profile = () => {
                       className="pl-10 font-mono font-black text-lg bg-slate-100 dark:bg-slate-800 border-primary/20 text-primary cursor-not-allowed opacity-100"
                     />
                   </div>
-                  <p className="text-[10px] text-primary font-medium italic">Este número é único e não pode ser alterado.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -181,22 +200,50 @@ const Profile = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Button type="submit" className="flex-1 gap-2 rounded-xl h-12 font-bold" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {loading ? 'Salvando...' : 'Salvar Alterações'}
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  className="flex-1 gap-2 rounded-xl h-12 text-destructive hover:bg-destructive/10"
-                  onClick={() => signOut()}
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sair da Conta
-                </Button>
-              </div>
+              <Button type="submit" className="w-full gap-2 rounded-xl h-12 font-bold" disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {loading ? 'Salvando...' : 'Salvar Alterações do Perfil'}
+              </Button>
             </form>
+
+            <Separator className="my-8" />
+
+            <form onSubmit={handleUpdateEmail} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Alterar E-mail de Acesso</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="novo@email.com"
+                    className="pl-10 rounded-xl"
+                    required
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Ao alterar o e-mail, você precisará confirmar a mudança no link enviado para o novo endereço.
+                </p>
+              </div>
+              <Button type="submit" variant="outline" className="w-full gap-2 rounded-xl h-12 font-bold" disabled={emailLoading}>
+                {emailLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                {emailLoading ? 'Solicitando...' : 'Atualizar E-mail'}
+              </Button>
+            </form>
+
+            <div className="pt-8">
+              <Button 
+                type="button" 
+                variant="ghost" 
+                className="w-full gap-2 rounded-xl h-12 text-destructive hover:bg-destructive/10"
+                onClick={() => signOut()}
+              >
+                <LogOut className="h-4 w-4" />
+                Sair da Conta
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
