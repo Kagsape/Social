@@ -28,6 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   const fetchUserProfile = useCallback(async (userId: string, authUser?: User) => {
+    console.log('[Auth] Buscando perfil para:', userId);
     try {
       let { data: profile, error: profileError } = await supabase
         .from('users')
@@ -35,8 +36,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .maybeSingle();
 
+      if (profileError) {
+        console.error('[Auth] Erro ao buscar perfil:', profileError.message);
+      }
+
       // Criação automática do perfil na tabela 'users' se não existir
       if (!profile && authUser) {
+        console.log('[Auth] Perfil não encontrado, criando...');
         const metadata = authUser.user_metadata;
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
@@ -52,23 +58,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select()
           .single();
         
-        if (!insertError) profile = newProfile;
+        if (insertError) {
+          console.error('[Auth] Erro ao criar perfil:', insertError.message);
+        } else {
+          profile = newProfile;
+        }
       }
 
       let rolesList: string[] = [];
-      const { data: userRolesData } = await supabase
-        .from('user_roles')
-        .select('role_id')
-        .eq('user_id', userId);
+      try {
+        const { data: userRolesData } = await supabase
+          .from('user_roles')
+          .select('role_id')
+          .eq('user_id', userId);
 
-      if (userRolesData && userRolesData.length > 0) {
-        const roleIds = userRolesData.map(ur => ur.role_id);
-        const { data: rolesData } = await supabase
-          .from('roles')
-          .select('name')
-          .in('id', roleIds);
-        
-        rolesList = rolesData?.map(r => r.name) || [];
+        if (userRolesData && userRolesData.length > 0) {
+          const roleIds = userRolesData.map(ur => ur.role_id);
+          const { data: rolesData } = await supabase
+            .from('roles')
+            .select('name')
+            .in('id', roleIds);
+          
+          rolesList = rolesData?.map(r => r.name) || [];
+        }
+      } catch (roleErr) {
+        console.warn('[Auth] Erro ao buscar roles extras:', roleErr);
       }
 
       if (profile?.role && !rolesList.includes(profile.role)) {
@@ -76,12 +90,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       setRoles(rolesList);
-
-      if (profile) {
-        setUserProfile({ ...profile });
-      }
+      setUserProfile(profile || null);
+      console.log('[Auth] Perfil carregado com sucesso');
     } catch (err) {
-      console.error('[Auth:Profile] Erro ao carregar perfil:', err);
+      console.error('[Auth:Profile] Erro crítico:', err);
     }
   }, []);
 
@@ -89,19 +101,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initialize = async () => {
+      console.log('[Auth] Inicializando sessão...');
       try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('[Auth] Erro ao obter sessão inicial:', error.message);
+        }
+
         if (mounted) {
           if (initialSession) {
+            console.log('[Auth] Sessão encontrada');
             setSession(initialSession);
             setUser(initialSession.user);
             await fetchUserProfile(initialSession.user.id, initialSession.user);
+          } else {
+            console.log('[Auth] Nenhuma sessão ativa');
           }
         }
       } catch (error) {
-        console.error('[Auth:Init] Erro:', error);
+        console.error('[Auth:Init] Erro inesperado:', error);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          console.log('[Auth] Finalizando estado de carregamento');
+          setLoading(false);
+        }
       }
     };
 
@@ -109,26 +133,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          setSession(currentSession);
-          setUser(currentSession?.user ?? null);
-          if (currentSession?.user) {
-            await fetchUserProfile(currentSession.user.id, currentSession.user);
+        console.log('[Auth] Evento de mudança:', event);
+        if (mounted) {
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            setSession(currentSession);
+            setUser(currentSession?.user ?? null);
+            if (currentSession?.user) {
+              await fetchUserProfile(currentSession.user.id, currentSession.user);
+            }
+            setLoading(false);
+          } else if (event === 'SIGNED_OUT') {
+            setSession(null);
+            setUser(null);
+            setUserProfile(null);
+            setRoles([]);
+            setLoading(false);
           }
-          setLoading(false);
-        } else if (event === 'SIGNED_OUT') {
-          setSession(null);
-          setUser(null);
-          setUserProfile(null);
-          setRoles([]);
-          setLoading(false);
         }
       }
     );
 
+    // Timeout de segurança: se em 10 segundos não carregar, libera a tela
+    const safetyTimeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('[Auth] Timeout de segurança atingido. Forçando fim do carregamento.');
+        setLoading(false);
+      }
+    }, 10000);
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      clearTimeout(safetyTimeout);
     };
   }, [fetchUserProfile]);
 
