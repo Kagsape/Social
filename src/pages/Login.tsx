@@ -21,20 +21,6 @@ const Login = () => {
 
   const from = (location.state as any)?.from?.pathname || '/feed';
 
-  const handleGoogleLogin = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-      if (error) throw error;
-    } catch (error: any) {
-      showError('Erro ao conectar com Google.');
-    }
-  };
-
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!registrationId.trim() || !password.trim()) return;
@@ -42,52 +28,69 @@ const Login = () => {
     setLoading(true);
     setErrorDetail(null);
     const cleanId = registrationId.trim();
+    const timestamp = new Date().toLocaleTimeString();
 
-    const timeoutId = setTimeout(() => {
-      if (loading) {
-        setLoading(false);
-        setErrorDetail("A conexão com o servidor expirou. Verifique sua internet.");
-        showError("Tempo de resposta esgotado.");
-      }
-    }, 15000);
+    console.log(`[${timestamp}] [LOGIN_DEBUG] 🏁 Iniciando tentativa de login para ID:`, cleanId);
 
     try {
-      const { data: userData } = await supabase
+      // 1. Verificar se já existe um e-mail para este ID
+      console.log(`[${timestamp}] [LOGIN_DEBUG] 1️⃣ Buscando e-mail na tabela 'users'...`);
+      const { data: userData, error: userQueryError } = await supabase
         .from('users')
         .select('email')
         .or(`student_id.eq.${cleanId},teacher_id.eq.${cleanId}`)
         .maybeSingle();
 
-      const targetEmail = userData?.email || `${cleanId}@app.local`;
+      if (userQueryError) console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro na busca de usuário:`, userQueryError);
 
+      const targetEmail = userData?.email || `${cleanId}@app.local`;
+      console.log(`[${timestamp}] [LOGIN_DEBUG] 📧 E-mail alvo definido como:`, targetEmail);
+
+      // 2. Tentar Login
+      console.log(`[${timestamp}] [LOGIN_DEBUG] 2️⃣ Tentando autenticação com Supabase Auth...`);
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: password,
       });
 
       if (!signInError && signInData.session) {
-        clearTimeout(timeoutId);
+        console.log(`[${timestamp}] [LOGIN_DEBUG] ✅ Login bem-sucedido! Redirecionando para:`, from);
         showSuccess('Bem-vindo de volta!');
         navigate(from, { replace: true });
         return;
       }
 
+      if (signInError) {
+        console.warn(`[${timestamp}] [LOGIN_DEBUG] ⚠️ Falha no login direto (pode ser primeiro acesso):`, signInError.message);
+      }
+
+      // 3. Verificar Whitelist
+      console.log(`[${timestamp}] [LOGIN_DEBUG] 3️⃣ Verificando ID na 'registration_whitelist'...`);
       const { data: whitelistEntry, error: whitelistError } = await supabase
         .from('registration_whitelist')
         .select('*')
         .eq('registration_id', cleanId)
         .maybeSingle();
 
-      if (whitelistError) throw new Error(`Erro ao validar na lista branca: ${whitelistError.message}`);
+      if (whitelistError) {
+        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro ao consultar whitelist:`, whitelistError);
+        throw new Error(`Erro no banco de dados: ${whitelistError.message}`);
+      }
       
       if (!whitelistEntry) {
+        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ ID não encontrado na whitelist.`);
         throw new Error('Esta matrícula não está autorizada no sistema.');
       }
 
+      console.log(`[${timestamp}] [LOGIN_DEBUG] 📄 Entrada na whitelist encontrada:`, whitelistEntry);
+
       if (password !== whitelistEntry.password) {
+        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Senha incorreta. Esperada: ${whitelistEntry.password}, Recebida: ${password}`);
         throw new Error('Senha incorreta para esta matrícula.');
       }
 
+      // 4. Primeiro acesso: Criar conta
+      console.log(`[${timestamp}] [LOGIN_DEBUG] 4️⃣ Criando nova conta (Primeiro Acesso)...`);
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: targetEmail,
         password: password,
@@ -100,22 +103,25 @@ const Login = () => {
         }
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        console.error(`[${timestamp}] [LOGIN_DEBUG] ❌ Erro no signUp:`, signUpError);
+        throw signUpError;
+      }
       
       if (signUpData.session) {
-        clearTimeout(timeoutId);
+        console.log(`[${timestamp}] [LOGIN_DEBUG] ✅ Conta criada e logada com sucesso!`);
         showSuccess('Conta ativada com sucesso!');
         navigate(from, { replace: true });
       } else {
+        console.log(`[${timestamp}] [LOGIN_DEBUG] ℹ️ Conta criada, mas aguardando confirmação ou re-login.`);
         showSuccess('Conta criada! Tente entrar novamente.');
         setLoading(false);
       }
     } catch (error: any) {
+      console.error(`[${timestamp}] [LOGIN_DEBUG] 🚨 Erro final capturado:`, error);
       setErrorDetail(error.message);
       showError(error.message);
       setLoading(false);
-    } finally {
-      clearTimeout(timeoutId);
     }
   };
 
@@ -132,32 +138,19 @@ const Login = () => {
         <Card className="border-none shadow-xl">
           <CardHeader>
             <CardTitle>Entrar</CardTitle>
-            <CardDescription>Use sua matrícula ou sua conta Google.</CardDescription>
+            <CardDescription>Use sua matrícula e senha autorizada.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {errorDetail && (
               <div className="bg-destructive/10 p-4 rounded-xl flex items-start gap-3 text-destructive text-sm animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                <p><strong>Erro:</strong> {errorDetail}</p>
+                <div className="space-y-1">
+                  <p className="font-bold">Erro no Login:</p>
+                  <p className="text-xs opacity-80">{errorDetail}</p>
+                  <p className="text-[10px] mt-2 italic">Dica: Abra o console (F12) para ver os logs detalhados.</p>
+                </div>
               </div>
             )}
-
-            <Button 
-              variant="outline" 
-              className="w-full h-12 rounded-xl gap-3 font-bold" 
-              onClick={handleGoogleLogin}
-              disabled={loading}
-            >
-              <Chrome className="h-5 w-5 text-red-500" />
-              Entrar com Google
-            </Button>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center"><Separator /></div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Ou via matrícula</span>
-              </div>
-            </div>
 
             <form onSubmit={handleAuth} className="space-y-4">
               <div className="space-y-2">
