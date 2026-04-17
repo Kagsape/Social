@@ -12,5 +12,13 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: 'ciep165-auth-token',
+    flowType: 'pkce', // Recomendado para maior segurança e resiliência
+  },
+  global: {
+    // Adiciona headers padrão se necessário, mas o foco aqui é a resiliência
+    fetch: (...args) => fetch(...args).catch(err => {
+      console.error("[Supabase:Fetch] Erro de rede detectado:", err.message);
+      throw err;
+    })
   }
 });
