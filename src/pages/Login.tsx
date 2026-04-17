@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Hash, Lock, Loader2, ArrowLeft, Chrome } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/AuthProvider';
 
@@ -19,7 +19,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Redireciona apenas quando o loading terminar E o perfil estiver carregado
+  // Redireciona se já estiver logado
   useEffect(() => {
     if (!authLoading && user && userProfile) {
       navigate('/feed', { replace: true });
@@ -36,32 +36,45 @@ const Login = () => {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanId = registrationId.trim();
-    if (!cleanId || !password.trim()) return;
+    const cleanPass = password.trim();
+
+    if (!cleanId || !cleanPass) {
+      showError("Preencha matrícula e senha.");
+      return;
+    }
     
     setSubmitting(true);
 
     try {
+      // 1. Validar se a matrícula existe na registration_whitelist
       const { data: whitelist, error: wlError } = await supabase
         .from('registration_whitelist')
         .select('*')
         .eq('registration_id', cleanId)
         .maybeSingle();
 
-      if (wlError) throw new Error("Erro ao conectar com o servidor.");
-      if (!whitelist) throw new Error("Matrícula não encontrada na lista de autorizados.");
-      if (password !== whitelist.password) throw new Error("Senha incorreta para esta matrícula.");
+      if (wlError) throw new Error("Erro ao conectar com o banco de dados.");
+      if (!whitelist) throw new Error("Matrícula não autorizada. Fale com o administrador.");
+      
+      // 2. Validar a senha da lista branca
+      if (cleanPass !== whitelist.password) {
+        throw new Error("Senha incorreta para esta matrícula.");
+      }
 
+      // Criamos um e-mail virtual para o Supabase Auth
       const targetEmail = `${cleanId}@ciep165.app`;
 
+      // 3. Tentar Login
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
-        password: password,
+        password: cleanPass,
       });
 
+      // 4. Se o usuário não existir no Auth, criamos ele agora (Auto-registro)
       if (signInError && signInError.message.includes("Invalid login credentials")) {
         const { error: signUpError } = await supabase.auth.signUp({
           email: targetEmail,
-          password: password,
+          password: cleanPass,
           options: {
             data: {
               name: whitelist.name,
@@ -70,13 +83,16 @@ const Login = () => {
             }
           }
         });
+        
         if (signUpError) throw signUpError;
+        showSuccess("Primeiro acesso realizado com sucesso!");
       } else if (signInError) {
         throw signInError;
       }
       
     } catch (error: any) {
       showError(error.message);
+    } finally {
       setSubmitting(false);
     }
   };
@@ -116,12 +132,12 @@ const Login = () => {
 
             <form onSubmit={handleAuth} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="registration">Matrícula</Label>
+                <Label htmlFor="registration">Matrícula / ID</Label>
                 <div className="relative">
                   <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="registration"
-                    placeholder="Sua matrícula"
+                    placeholder="Ex: 2024001"
                     value={registrationId}
                     onChange={(e) => setRegistrationId(e.target.value)}
                     required
