@@ -60,6 +60,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err: any) {
       console.error("[AuthProvider] Erro ao carregar perfil:", err.message);
+      // Não travamos o app se o perfil falhar, apenas limpamos o perfil
+      setUserProfile(null);
+      setRoles([]);
     }
   }, []);
 
@@ -68,17 +71,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initialize = async () => {
       try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) throw sessionError;
+
         if (mounted) {
           setSession(initialSession);
           setUser(initialSession?.user ?? null);
+          
           if (initialSession?.user) {
             await fetchUserProfile(initialSession.user.id, initialSession.user);
           }
         }
       } catch (error: any) {
-        setAuthError(error.message);
+        console.error("[AuthProvider] Erro na inicialização:", error.message);
+        if (mounted) setAuthError(error.message);
       } finally {
+        // GARANTIA: O loading sempre termina aqui na montagem inicial
         if (mounted) setLoading(false);
       }
     };
@@ -89,19 +98,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, currentSession) => {
         if (!mounted) return;
 
+        // Se houver mudança de estado, mostramos o loading brevemente para sincronizar
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          setSession(currentSession);
-          setUser(currentSession?.user ?? null);
-          if (currentSession?.user) {
-            await fetchUserProfile(currentSession.user.id, currentSession.user);
+          setLoading(true);
+          try {
+            setSession(currentSession);
+            setUser(currentSession?.user ?? null);
+            if (currentSession?.user) {
+              await fetchUserProfile(currentSession.user.id, currentSession.user);
+            }
+          } catch (err) {
+            console.error("[AuthProvider] Erro no evento de auth:", err);
+          } finally {
+            if (mounted) setLoading(false);
           }
-          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
           setUserProfile(null);
           setRoles([]);
-          setLoading(false);
+          if (mounted) setLoading(false);
         }
       }
     );
@@ -113,12 +129,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchUserProfile]);
 
   const signOut = async () => {
-    setLoading(true);
-    await supabase.auth.signOut();
+    try {
+      setLoading(true);
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Erro ao sair:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const refreshProfile = async () => {
-    if (user) await fetchUserProfile(user.id, user);
+    if (user) {
+      setLoading(true);
+      try {
+        await fetchUserProfile(user.id, user);
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
   const value = {
