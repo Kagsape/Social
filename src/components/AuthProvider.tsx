@@ -29,101 +29,117 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // Função segura para buscar ou criar perfil
   const fetchUserProfile = useCallback(async (userId: string, authUser: User) => {
     try {
-      const { data: profile, error: profileError } = await supabase
+      // 1. Tenta buscar o perfil
+      const { data: profile, error: fetchError } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
 
-      if (profileError) throw profileError;
-
-      if (!profile) {
-        // Auto-provisionamento se o perfil não existir na tabela users
-        const metadata = authUser.user_metadata;
-        const { data: newProfile, error: insertError } = await supabase.from('users').insert({
-          id: userId,
-          name: metadata?.name || authUser.email?.split('@')[0],
-          email: authUser.email,
-          role: metadata?.role || 'student',
-          student_id: metadata?.student_id || null,
-          teacher_id: metadata?.teacher_id || null,
-        }).select().single();
-
-        if (insertError) throw insertError;
-        setUserProfile(newProfile);
-        setRoles([newProfile.role]);
-      } else {
-        setUserProfile(profile);
-        setRoles([profile.role]);
+      if (fetchError) {
+        console.error("[Auth:Profile] Erro na busca:", fetchError.message);
+        return null;
       }
-    } catch (err: any) {
-      console.error("[AuthProvider] Erro ao carregar perfil:", err.message);
-      // Não travamos o app se o perfil falhar, apenas limpamos o perfil
-      setUserProfile(null);
-      setRoles([]);
+
+      // 2. Se o perfil não existe, tenta criar (Auto-provisionamento)
+      if (!profile) {
+        console.log("[Auth:Profile] Perfil não encontrado, criando...");
+        const metadata = authUser.user_metadata;
+        
+        const { data: newProfile, error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: userId,
+            name: metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
+            email: authUser.email,
+            role: metadata?.role || 'student',
+            student_id: metadata?.student_id || null,
+            teacher_id: metadata?.teacher_id || null,
+          })
+          .select()
+          .maybeSingle();
+
+        if (insertError) {
+          console.error("[Auth:Profile] Erro ao auto-criar perfil:", insertError.message);
+          return null;
+        }
+        return newProfile;
+      }
+
+      return profile;
+    } catch (err) {
+      console.error("[Auth:Profile] Erro crítico inesperado:", err);
+      return null;
     }
   }, []);
 
+  // Inicialização do App
   useEffect(() => {
-    let mounted = true;
+    let isMounted = true;
 
     const initialize = async () => {
       try {
+        // Busca sessão inicial
         const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) throw sessionError;
 
-        if (mounted) {
+        if (isMounted) {
           setSession(initialSession);
           setUser(initialSession?.user ?? null);
           
           if (initialSession?.user) {
-            await fetchUserProfile(initialSession.user.id, initialSession.user);
+            const profile = await fetchUserProfile(initialSession.user.id, initialSession.user);
+            if (isMounted) {
+              setUserProfile(profile);
+              setRoles(profile?.role ? [profile.role] : []);
+            }
           }
         }
       } catch (error: any) {
-        console.error("[AuthProvider] Erro na inicialização:", error.message);
-        if (mounted) setAuthError(error.message);
+        console.error("[Auth:Init] Falha na inicialização:", error.message);
+        if (isMounted) setAuthError(error.message);
       } finally {
-        // GARANTIA: O loading sempre termina aqui na montagem inicial
-        if (mounted) setLoading(false);
+        // GARANTIA ABSOLUTA: O loading termina aqui, aconteça o que acontecer
+        if (isMounted) setLoading(false);
       }
     };
 
     initialize();
 
+    // Ouvinte de mudanças de estado (Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        if (!mounted) return;
+        if (!isMounted) return;
 
-        // Se houver mudança de estado, mostramos o loading brevemente para sincronizar
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          setLoading(true);
-          try {
-            setSession(currentSession);
-            setUser(currentSession?.user ?? null);
-            if (currentSession?.user) {
-              await fetchUserProfile(currentSession.user.id, currentSession.user);
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          
+          if (currentSession?.user) {
+            // Não bloqueamos o app aqui, apenas atualizamos o perfil em background
+            const profile = await fetchUserProfile(currentSession.user.id, currentSession.user);
+            if (isMounted) {
+              setUserProfile(profile);
+              setRoles(profile?.role ? [profile.role] : []);
+              setLoading(false); // Garante fim do loading após login
             }
-          } catch (err) {
-            console.error("[AuthProvider] Erro no evento de auth:", err);
-          } finally {
-            if (mounted) setLoading(false);
           }
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
           setUserProfile(null);
           setRoles([]);
-          if (mounted) setLoading(false);
+          setLoading(false);
         }
       }
     );
 
     return () => {
-      mounted = false;
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, [fetchUserProfile]);
@@ -141,12 +157,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshProfile = async () => {
     if (user) {
-      setLoading(true);
-      try {
-        await fetchUserProfile(user.id, user);
-      } finally {
-        setLoading(false);
-      }
+      const profile = await fetchUserProfile(user.id, user);
+      setUserProfile(profile);
+      setRoles(profile?.role ? [profile.role] : []);
     }
   };
 
