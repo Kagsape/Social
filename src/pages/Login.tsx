@@ -27,22 +27,35 @@ const Login = () => {
   }, [user, userProfile, authLoading, navigate]);
 
   const handleGoogleLogin = async () => {
-    // Se for nativo (Android/iOS), usa o esquema customizado. Se for web, usa a URL normal.
-    const redirectTo = Capacitor.isNativePlatform() 
+    const isNative = Capacitor.isNativePlatform();
+    
+    // URL de retorno configurada no Supabase
+    const redirectTo = isNative 
       ? 'com.ciep165.app://auth/callback' 
       : `${window.location.origin}/auth/callback`;
 
-    console.log('[Login] Iniciando Google Login com redirectTo:', redirectTo);
+    console.log('[Login] Iniciando Google Login. Nativo:', isNative);
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { 
-        redirectTo,
-        skipBrowserRedirect: false
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { 
+          redirectTo,
+          // No nativo, pulamos o redirecionamento automático para disparar manualmente
+          skipBrowserRedirect: isNative 
+        }
+      });
+
+      if (error) throw error;
+
+      // Se for nativo, o Supabase retorna a URL em data.url em vez de redirecionar a webview
+      if (isNative && data?.url) {
+        console.log('[Login] Abrindo navegador externo manualmente:', data.url);
+        window.location.href = data.url;
       }
-    });
-
-    if (error) showError(error.message);
+    } catch (error: any) {
+      showError(error.message);
+    }
   };
 
   const handleAuth = async (e: React.FormEvent) => {
