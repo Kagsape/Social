@@ -148,7 +148,7 @@
                     }
                 },
                 {
-                    "source": "C:\\Users\\Lenovo\\dyad-apps\\Social\\node_modules\\.pnpm\\@capacitor+android@6.2.1_@capacitor+core@6.2.1\\node_modules\\@capacitor\\android\\capacitor\\build\\intermediates\\packaged_res\\debug\\values\\values.xml",
+                    "source": "C:\\Users\\Lenovo\\dyad-apps\\Social\\node_modules\\@capacitor\\android\\capacitor\\build\\intermediates\\packaged_res\\debug\\values\\values.xml",
                     "from": {
                         "startLines": "2,3,4,5,10",
                         "startColumns": "4,4,4,4,4",

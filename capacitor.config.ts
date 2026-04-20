@@ -5,7 +5,9 @@ const config: CapacitorConfig = {
   appName: 'CIEP 165',
   webDir: 'dist',
   server: {
-    androidScheme: 'https'
+    androidScheme: 'https',
+    // Permite que o app capture o esquema customizado
+    allowNavigation: ['com.ciep165.app://*']
   }
 };
 

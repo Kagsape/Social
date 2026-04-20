@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/AuthProvider';
+import { Capacitor } from '@capacitor/core';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -19,7 +20,6 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Redireciona se já estiver logado
   useEffect(() => {
     if (!authLoading && user && userProfile) {
       navigate('/feed', { replace: true });
@@ -27,10 +27,22 @@ const Login = () => {
   }, [user, userProfile, authLoading, navigate]);
 
   const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
+    // Se for nativo (Android/iOS), usa o esquema customizado. Se for web, usa a URL normal.
+    const redirectTo = Capacitor.isNativePlatform() 
+      ? 'com.ciep165.app://auth/callback' 
+      : `${window.location.origin}/auth/callback`;
+
+    console.log('[Login] Iniciando Google Login com redirectTo:', redirectTo);
+
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` }
+      options: { 
+        redirectTo,
+        skipBrowserRedirect: false
+      }
     });
+
+    if (error) showError(error.message);
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -46,7 +58,6 @@ const Login = () => {
     setSubmitting(true);
 
     try {
-      // 1. Validar se a matrícula existe na registration_whitelist
       const { data: whitelist, error: wlError } = await supabase
         .from('registration_whitelist')
         .select('*')
@@ -56,21 +67,17 @@ const Login = () => {
       if (wlError) throw new Error("Erro ao conectar com o banco de dados.");
       if (!whitelist) throw new Error("Matrícula não autorizada. Fale com o administrador.");
       
-      // 2. Validar a senha da lista branca
       if (cleanPass !== whitelist.password) {
         throw new Error("Senha incorreta para esta matrícula.");
       }
 
-      // Criamos um e-mail virtual para o Supabase Auth
       const targetEmail = `${cleanId}@ciep165.app`;
 
-      // 3. Tentar Login
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: cleanPass,
       });
 
-      // 4. Se o usuário não existir no Auth, criamos ele agora (Auto-registro)
       if (signInError && signInError.message.includes("Invalid login credentials")) {
         const { error: signUpError } = await supabase.auth.signUp({
           email: targetEmail,

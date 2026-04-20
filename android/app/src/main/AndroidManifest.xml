@@ -22,12 +22,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Intent Filter para Deep Linking (socialapp://auth) -->
+            <!-- Intent Filter para Deep Linking (Supabase Auth) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="socialapp" android:host="auth" />
+                <data android:scheme="com.ciep165.app" android:host="auth" />
             </intent-filter>
 
         </activity>

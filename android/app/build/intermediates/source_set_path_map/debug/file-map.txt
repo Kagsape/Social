@@ -28,4 +28,5 @@ com.ciep165.app-merged_res-26 C:\Users\Lenovo\dyad-apps\Social\android\app\build
 com.ciep165.app-debug-27 C:\Users\Lenovo\dyad-apps\Social\android\app\src\debug\res
 com.ciep165.app-main-28 C:\Users\Lenovo\dyad-apps\Social\android\app\src\main\res
 com.ciep165.app-packaged_res-29 C:\Users\Lenovo\dyad-apps\Social\android\capacitor-cordova-android-plugins\build\intermediates\packaged_res\debug
-com.ciep165.app-packaged_res-30 C:\Users\Lenovo\dyad-apps\Social\node_modules\.pnpm\@capacitor+android@6.2.1_@capacitor+core@6.2.1\node_modules\@capacitor\android\capacitor\build\intermediates\packaged_res\debug
+com.ciep165.app-packaged_res-30 C:\Users\Lenovo\dyad-apps\Social\node_modules\@capacitor\android\capacitor\build\intermediates\packaged_res\debug
+com.ciep165.app-packaged_res-31 C:\Users\Lenovo\dyad-apps\Social\node_modules\@capacitor\app\android\build\intermediates\packaged_res\debug
