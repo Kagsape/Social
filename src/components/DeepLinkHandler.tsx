@@ -9,33 +9,33 @@ import { showSuccess, showError } from '@/utils/toast';
 const DeepLinkHandler = () => {
   const navigate = useNavigate();
 
-  const handleAuthUrl = useCallback(async (urlStr: string) => {
-    console.log('[DeepLink] Processando URL:', urlStr);
+  const handleUrl = useCallback(async (urlString: string) => {
+    console.log('[DeepLink] Processando URL:', urlString);
     
     try {
-      const url = new URL(urlStr);
-      
+      const url = new URL(urlString);
       // O Supabase envia os tokens após o '#' (fragmento)
       const hash = url.hash.substring(1);
-      if (!hash) return;
 
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
+      if (hash) {
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
 
-      if (accessToken && refreshToken) {
-        console.log('[DeepLink] Tokens detectados. Definindo sessão...');
-        
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
+        if (accessToken && refreshToken) {
+          console.log('[DeepLink] Tokens detectados. Definindo sessão...');
+          
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
 
-        if (!error) {
-          showSuccess('Login realizado com sucesso!');
-          navigate('/feed', { replace: true });
-        } else {
-          throw error;
+          if (!error) {
+            showSuccess('Login realizado com sucesso!');
+            navigate('/feed', { replace: true });
+          } else {
+            throw error;
+          }
         }
       }
     } catch (err: any) {
@@ -47,21 +47,24 @@ const DeepLinkHandler = () => {
   useEffect(() => {
     // 1. Lidar com o app já aberto (Warm Start)
     const urlListener = App.addListener('appUrlOpen', (data) => {
-      handleAuthUrl(data.url);
+      handleUrl(data.url);
     });
 
     // 2. Lidar com o app sendo aberto do zero (Cold Start)
-    App.getLaunchUrl().then((data) => {
+    const checkInitialUrl = async () => {
+      const data = await App.getLaunchUrl();
       if (data?.url) {
         console.log('[DeepLink] App aberto via link (Cold Start):', data.url);
-        handleAuthUrl(data.url);
+        handleUrl(data.url);
       }
-    });
+    };
+
+    checkInitialUrl();
 
     return () => {
       urlListener.remove();
     };
-  }, [handleAuthUrl]);
+  }, [handleUrl]);
 
   return null;
 };

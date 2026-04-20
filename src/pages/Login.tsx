@@ -41,14 +41,12 @@ const Login = () => {
         provider: 'google',
         options: { 
           redirectTo,
-          // No nativo, pulamos o redirecionamento automático para disparar manualmente
           skipBrowserRedirect: isNative 
         }
       });
 
       if (error) throw error;
 
-      // Se for nativo, o Supabase retorna a URL em data.url em vez de redirecionar a webview
       if (isNative && data?.url) {
         console.log('[Login] Abrindo navegador externo manualmente:', data.url);
         window.location.href = data.url;
