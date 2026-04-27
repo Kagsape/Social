@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, UserPlus, Loader2, Check, Clock } from 'lucide-react';
+import { Search, UserPlus, Loader2, Check, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -31,20 +31,30 @@ const EnrollStudentDialog: React.FC<EnrollStudentDialogProps> = ({ courseId, cou
   const [loading, setLoading] = useState(false);
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [tableError, setTableError] = useState(false);
 
   const searchStudents = async () => {
     if (!searchTerm.trim()) return;
     
     setLoading(true);
+    setTableError(false);
     try {
-      // 1. Buscar alunos já matriculados ou pré-matriculados
+      // 1. Buscar alunos já matriculados
       const { data: enrolled } = await supabase.from('enrollments').select('student_id').eq('course_id', courseId);
-      const { data: pending } = await supabase.from('pending_enrollments').select('registration_id').eq('course_id', courseId);
-      
       const enrolledUserIds = enrolled?.map(e => e.student_id) || [];
-      const pendingRegIds = pending?.map(p => p.registration_id) || [];
 
-      // 2. Buscar usuários reais
+      // 2. Buscar pré-matrículas (com tratamento de erro caso a tabela não exista)
+      let pendingRegIds: string[] = [];
+      const { data: pending, error: pError } = await supabase.from('pending_enrollments').select('registration_id').eq('course_id', courseId);
+      
+      if (pError) {
+        console.warn("Tabela pending_enrollments não encontrada ou sem permissão.");
+        if (pError.code === '42P01' || pError.status === 403) setTableError(true);
+      } else {
+        pendingRegIds = pending?.map(p => p.registration_id) || [];
+      }
+
+      // 3. Buscar usuários reais
       const { data: users } = await supabase
         .from('users')
         .select('id, name, avatar_url, student_id')
@@ -52,7 +62,7 @@ const EnrollStudentDialog: React.FC<EnrollStudentDialogProps> = ({ courseId, cou
         .or(`name.ilike.%${searchTerm}%,student_id.ilike.%${searchTerm}%`)
         .limit(5);
 
-      // 3. Buscar na Whitelist (alunos que ainda não tem conta)
+      // 4. Buscar na Whitelist
       const { data: whitelist } = await supabase
         .from('registration_whitelist')
         .select('registration_id, name')
@@ -60,10 +70,8 @@ const EnrollStudentDialog: React.FC<EnrollStudentDialogProps> = ({ courseId, cou
         .or(`name.ilike.%${searchTerm}%,registration_id.ilike.%${searchTerm}%`)
         .limit(5);
 
-      // 4. Combinar e processar resultados
       const combined: any[] = [];
 
-      // Adicionar usuários reais
       users?.forEach(u => {
         combined.push({
           ...u,
@@ -72,7 +80,6 @@ const EnrollStudentDialog: React.FC<EnrollStudentDialogProps> = ({ courseId, cou
         });
       });
 
-      // Adicionar whitelist (apenas se não houver usuário real com esse ID)
       whitelist?.forEach(w => {
         const userExists = users?.some(u => u.student_id === w.registration_id);
         if (!userExists) {
@@ -114,13 +121,15 @@ const EnrollStudentDialog: React.FC<EnrollStudentDialogProps> = ({ courseId, cou
         if (error) throw error;
         showSuccess(`${item.name} matriculado!`);
       } else {
-        // Pré-matrícula para quem não tem conta
+        if (tableError) {
+          throw new Error("A tabela de pré-matrículas ainda não foi criada no banco de dados.");
+        }
         const { error } = await supabase.from('pending_enrollments').insert({
           course_id: courseId,
           registration_id: item.student_id
         });
         if (error) throw error;
-        showSuccess(`${item.name} pré-matriculado! Ele entrará no curso assim que criar a conta.`);
+        showSuccess(`${item.name} pré-matriculado!`);
       }
       
       searchStudents();
@@ -142,10 +151,17 @@ const EnrollStudentDialog: React.FC<EnrollStudentDialogProps> = ({ courseId, cou
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Matricular Aluno</DialogTitle>
-          <DialogDescription>Busque por nome ou matrícula (incluindo alunos sem conta).</DialogDescription>
+          <DialogDescription>Busque por nome ou matrícula.</DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
+          {tableError && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-[10px] text-amber-800">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <p>Atenção: A função de pré-matrícula (para alunos sem conta) requer a criação da tabela no banco de dados.</p>
+            </div>
+          )}
+
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
