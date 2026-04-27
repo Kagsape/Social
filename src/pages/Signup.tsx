@@ -7,7 +7,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { User, Mail, Lock, UserCheck, ShieldAlert, ArrowLeft, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -19,39 +19,27 @@ import {
 } from "@/components/ui/select";
 
 const Signup = () => {
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  const { register, handleSubmit } = useForm();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<'student' | 'teacher'>('student');
 
   const handleRegister = async (data: any) => {
     const cleanId = data.registration_id.trim();
-    const selectedRole = role;
-    
     setLoading(true);
     try {
-      // 1. Buscar o ID na Whitelist
+      // 1. Validar na Whitelist
       const { data: whitelistEntry, error: whitelistError } = await supabase
         .from('registration_whitelist')
         .select('*')
         .eq('registration_id', cleanId)
         .maybeSingle();
 
-      if (whitelistError) {
-        console.error('Erro Whitelist:', whitelistError);
-        throw new Error('Erro ao validar matrícula. Verifique sua conexão ou se as políticas do banco foram configuradas.');
-      }
+      if (whitelistError) throw new Error('Erro ao validar matrícula.');
+      if (!whitelistEntry) throw new Error(`O ID "${cleanId}" não está autorizado.`);
+      if (whitelistEntry.role !== role) throw new Error(`Este ID é para o cargo de ${whitelistEntry.role}.`);
 
-      if (!whitelistEntry) {
-        throw new Error(`O ID "${cleanId}" não foi encontrado na lista de autorizados. Entre em contato com o administrador.`);
-      }
-
-      if (whitelistEntry.role !== selectedRole) {
-        const cargoAutorizado = whitelistEntry.role === 'student' ? 'ALUNO' : 'PROFESSOR';
-        throw new Error(`Este ID está autorizado apenas para o cargo de ${cargoAutorizado}.`);
-      }
-
-      // 2. Criar a conta no Auth
+      // 2. Criar conta
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -66,107 +54,77 @@ const Signup = () => {
 
       if (authError) throw authError;
 
-      showSuccess('Conta criada! Verifique seu e-mail para confirmar o cadastro.');
+      // 3. Processar pré-matrículas se for aluno
+      if (whitelistEntry.role === 'student' && authData.user) {
+        const { data: pending } = await supabase
+          .from('pending_enrollments')
+          .select('course_id')
+          .eq('registration_id', cleanId);
+
+        if (pending && pending.length > 0) {
+          const enrollments = pending.map(p => ({
+            course_id: p.course_id,
+            student_id: authData.user?.id,
+            status: 'active'
+          }));
+          await supabase.from('enrollments').insert(enrollments);
+          await supabase.from('pending_enrollments').delete().eq('registration_id', cleanId);
+        }
+      }
+
+      showSuccess('Conta criada! Verifique seu e-mail.');
       navigate('/login');
-      
     } catch (error: any) {
-      showError(error.message || 'Erro desconhecido ao criar conta.');
+      showError(error.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <Link to="/login" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-8">
-            <ArrowLeft className="h-4 w-4" /> Voltar para Login
+            <ArrowLeft className="h-4 w-4" /> Voltar
           </Link>
-          <div className="flex justify-center mb-4">
-            <div className="bg-primary p-3 rounded-2xl shadow-lg">
-              <UserCheck className="h-8 w-8 text-primary-foreground" />
-            </div>
-          </div>
           <h2 className="text-3xl font-bold tracking-tight">Criar Conta</h2>
-          <p className="text-muted-foreground mt-2">CIEP 165 - Validação de Matrícula</p>
         </div>
 
         <Card className="border-none shadow-2xl">
           <CardHeader>
             <CardTitle>Cadastro de Membro</CardTitle>
-            <CardDescription>Seu cargo deve coincidir com o autorizado na lista branca.</CardDescription>
+            <CardDescription>Valide seu acesso com seu ID autorizado.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(handleRegister)} className="space-y-5">
               <div className="space-y-2">
                 <Label>Tipo de Conta</Label>
-                <Select value={role} onValueChange={(value: 'student' | 'teacher') => setRole(value)}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
+                <Select value={role} onValueChange={(v: any) => setRole(v)}>
+                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="student">Aluno</SelectItem>
                     <SelectItem value="teacher">Professor</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="registration_id">Número de Matrícula / ID</Label>
-                <div className="relative">
-                  <ShieldAlert className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    {...register('registration_id', { required: true })}
-                    id="registration_id"
-                    placeholder="Digite seu ID"
-                    className="pl-10 rounded-xl font-mono"
-                  />
-                </div>
+                <Label htmlFor="registration_id">Matrícula / ID</Label>
+                <Input {...register('registration_id', { required: true })} id="registration_id" placeholder="Digite seu ID" className="rounded-xl font-mono" />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="name">Nome Completo</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    {...register('name', { required: true })}
-                    id="name"
-                    placeholder="Seu nome"
-                    className="pl-10 rounded-xl"
-                  />
-                </div>
+                <Input {...register('name', { required: true })} id="name" placeholder="Seu nome" className="rounded-xl" />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="email">E-mail</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    {...register('email', { required: true })}
-                    id="email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    className="pl-10 rounded-xl"
-                  />
-                </div>
+                <Input {...register('email', { required: true })} id="email" type="email" placeholder="seu@email.com" className="rounded-xl" />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    {...register('password', { required: true, minLength: 6 })}
-                    id="password"
-                    type="password"
-                    placeholder="Mínimo 6 caracteres"
-                    className="pl-10 rounded-xl"
-                  />
-                </div>
+                <Input {...register('password', { required: true, minLength: 6 })} id="password" type="password" placeholder="Mínimo 6 caracteres" className="rounded-xl" />
               </div>
-
-              <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg" disabled={loading}>
+              <Button type="submit" className="w-full rounded-xl py-6 font-bold" disabled={loading}>
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Validar e Criar Conta'}
               </Button>
             </form>
