@@ -14,6 +14,7 @@ import GradeForm from '@/components/GradeForm';
 import ComputerReservationForm from '@/components/ComputerReservationForm';
 import CreateCourseForm from '@/components/CreateCourseForm';
 import AdminCourseForm from '@/components/AdminCourseForm';
+import EnrollStudentDialog from '@/components/EnrollStudentDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -59,7 +60,6 @@ const TeacherDashboard = () => {
 
       setCourses(teacherCourses || []);
       
-      // Se o curso selecionado não existe mais na lista, reseta a seleção
       if (teacherCourses && teacherCourses.length > 0) {
         if (!selectedCourse || !teacherCourses.find(c => c.id === selectedCourse)) {
           setSelectedCourse(teacherCourses[0].id);
@@ -112,6 +112,8 @@ const TeacherDashboard = () => {
     fetchTeacherData();
   };
 
+  const selectedCourseData = courses.find(c => c.id === selectedCourse);
+
   if (loading) return <Layout><div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10" /></div></Layout>;
 
   return (
@@ -162,12 +164,22 @@ const TeacherDashboard = () => {
         <DashboardStats stats={stats} />
 
         <Tabs defaultValue="students" className="space-y-6">
-          <TabsList className="bg-muted/50 p-1 rounded-xl">
-            <TabsTrigger value="students" className="gap-2"><Users className="h-4 w-4" /> Alunos</TabsTrigger>
-            <TabsTrigger value="attendance" className="gap-2"><UserCheck className="h-4 w-4" /> Frequência</TabsTrigger>
-            <TabsTrigger value="grades" className="gap-2"><GraduationCap className="h-4 w-4" /> Notas</TabsTrigger>
-            <TabsTrigger value="reservations" className="gap-2"><Monitor className="h-4 w-4" /> Lab</TabsTrigger>
-          </TabsList>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <TabsList className="bg-muted/50 p-1 rounded-xl w-fit">
+              <TabsTrigger value="students" className="gap-2"><Users className="h-4 w-4" /> Alunos</TabsTrigger>
+              <TabsTrigger value="attendance" className="gap-2"><UserCheck className="h-4 w-4" /> Frequência</TabsTrigger>
+              <TabsTrigger value="grades" className="gap-2"><GraduationCap className="h-4 w-4" /> Notas</TabsTrigger>
+              <TabsTrigger value="reservations" className="gap-2"><Monitor className="h-4 w-4" /> Lab</TabsTrigger>
+            </TabsList>
+
+            {selectedCourse && selectedCourse !== 'none' && (
+              <EnrollStudentDialog 
+                courseId={selectedCourse} 
+                courseName={selectedCourseData?.name || ''} 
+                onEnrollmentSuccess={() => fetchCourseStudents(selectedCourse)}
+              />
+            )}
+          </div>
 
           <TabsContent value="students">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

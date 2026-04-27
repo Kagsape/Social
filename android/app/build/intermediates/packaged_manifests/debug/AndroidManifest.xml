@@ -50,6 +50,7 @@
 
                 <data
                     android:host="auth"
+                    android:path="/callback"
                     android:scheme="com.ciep165.app" />
             </intent-filter>
         </activity>
