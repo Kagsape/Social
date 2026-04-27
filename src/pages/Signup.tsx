@@ -39,7 +39,19 @@ const Signup = () => {
       if (!whitelistEntry) throw new Error(`O ID "${cleanId}" não está autorizado.`);
       if (whitelistEntry.role !== role) throw new Error(`Este ID é para o cargo de ${whitelistEntry.role}.`);
 
-      // 2. Criar conta
+      // 2. Verificar se a matrícula já está em uso por outro usuário
+      const idColumn = role === 'student' ? 'student_id' : 'teacher_id';
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq(idColumn, cleanId)
+        .maybeSingle();
+
+      if (existingUser) {
+        throw new Error('Esta matrícula já está vinculada a outra conta. Caso tenha esquecido sua senha, entre em contato com o suporte.');
+      }
+
+      // 3. Criar conta
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -47,14 +59,14 @@ const Signup = () => {
           data: {
             name: data.name,
             role: whitelistEntry.role,
-            [whitelistEntry.role === 'student' ? 'student_id' : 'teacher_id']: cleanId
+            [idColumn]: cleanId
           }
         },
       });
 
       if (authError) throw authError;
 
-      // 3. Processar pré-matrículas se for aluno
+      // 4. Processar pré-matrículas
       if (whitelistEntry.role === 'student' && authData.user) {
         const { data: pending } = await supabase
           .from('pending_enrollments')

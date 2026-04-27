@@ -40,6 +40,7 @@ const CompleteProfile = () => {
     const cleanId = registrationId.trim();
 
     try {
+      // 1. Validar na Whitelist
       const { data: whitelistEntry } = await supabase
         .from('registration_whitelist')
         .select('*')
@@ -49,7 +50,20 @@ const CompleteProfile = () => {
       if (!whitelistEntry) throw new Error(`O ID "${cleanId}" não está autorizado.`);
       if (whitelistEntry.role !== role) throw new Error(`Este ID é para o cargo de ${whitelistEntry.role}.`);
 
+      // 2. Verificar se a matrícula já está em uso por OUTRO usuário
       const idColumn = role === 'student' ? 'student_id' : 'teacher_id';
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq(idColumn, cleanId)
+        .neq('id', user.id) // Garante que não é o próprio usuário atual
+        .maybeSingle();
+
+      if (existingUser) {
+        throw new Error('Esta matrícula já está vinculada a outra conta de e-mail.');
+      }
+
+      // 3. Atualizar perfil
       const { error: updateError } = await supabase
         .from('users')
         .update({
@@ -61,7 +75,7 @@ const CompleteProfile = () => {
 
       if (updateError) throw updateError;
 
-      // Processar pré-matrículas
+      // 4. Processar pré-matrículas
       if (role === 'student') {
         const { data: pending } = await supabase
           .from('pending_enrollments')
