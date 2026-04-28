@@ -21,7 +21,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Tempo máximo de espera para o backend responder (7 segundos)
 const AUTH_TIMEOUT_MS = 7000;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -33,64 +32,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [authError, setAuthError] = useState<string | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchUserProfileBackground = useCallback((userId: string, authUser: User) => {
-    supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle()
-      .then(({ data: profile, error: fetchError }) => {
-        if (fetchError) {
-          console.error("[Auth:Profile] Erro na busca:", fetchError.message);
-          return;
+  const fetchUserProfileBackground = useCallback(async (userId: string, authUser: User) => {
+    try {
+      // Tenta buscar o perfil existente
+      const { data: profile, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error("[Auth:Profile] Erro na busca:", fetchError.message);
+        return;
+      }
+
+      if (profile) {
+        setUserProfile(profile);
+        setRoles([profile.role]);
+      } else {
+        // Se não existe, cria usando UPSERT para evitar erro de chave duplicada
+        const metadata = authUser.user_metadata;
+        const { data: newProfile, error: upsertError } = await supabase
+          .from('users')
+          .upsert({
+            id: userId,
+            name: metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
+            email: authUser.email,
+            role: metadata?.role || 'student',
+            student_id: metadata?.student_id || null,
+            teacher_id: metadata?.teacher_id || null,
+            updated_at: new Date().toISOString()
+          }, { 
+            onConflict: 'id',
+            ignoreDuplicates: false 
+          })
+          .select()
+          .maybeSingle();
+
+        if (upsertError) {
+          // Se ainda der erro de duplicidade na matrícula, ignoramos aqui para não travar o app
+          console.warn("[Auth:Profile] Aviso no upsert:", upsertError.message);
         }
 
-        if (profile) {
-          setUserProfile(profile);
-          setRoles([profile.role]);
-        } else {
-          const metadata = authUser.user_metadata;
-          supabase
-            .from('users')
-            .insert({
-              id: userId,
-              name: metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
-              email: authUser.email,
-              role: metadata?.role || 'student',
-              student_id: metadata?.student_id || null,
-              teacher_id: metadata?.teacher_id || null,
-            })
-            .select()
-            .maybeSingle()
-            .then(({ data: newProfile }) => {
-              if (newProfile) {
-                setUserProfile(newProfile);
-                setRoles([newProfile.role]);
-              }
-            });
+        if (newProfile) {
+          setUserProfile(newProfile);
+          setRoles([newProfile.role]);
         }
-      })
-      .catch(err => console.error("[Auth:Profile] Erro crítico:", err));
+      }
+    } catch (err) {
+      console.error("[Auth:Profile] Erro crítico:", err);
+    }
   }, []);
 
   useEffect(() => {
     let isMounted = true;
 
-    // Timeout de segurança para evitar loading infinito se o DNS/Rede falhar
     timeoutRef.current = setTimeout(() => {
       if (isMounted && loading) {
-        console.error("[Auth:Timeout] O servidor demorou muito para responder.");
-        setAuthError("Não foi possível conectar ao servidor. Verifique sua conexão ou se o serviço está online.");
+        setAuthError("O servidor demorou muito para responder. Verifique sua conexão.");
         setLoading(false);
       }
     }, AUTH_TIMEOUT_MS);
 
     const initialize = async () => {
       try {
-        // Tenta buscar a sessão com um catch para erros de rede imediatos
-        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession().catch(err => {
-          throw new Error("Falha de conexão com o banco de dados (DNS/Rede).");
-        });
+        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) throw sessionError;
 
@@ -101,12 +107,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(initialSession?.user ?? null);
           
           if (initialSession?.user) {
-            fetchUserProfileBackground(initialSession.user.id, initialSession.user);
+            await fetchUserProfileBackground(initialSession.user.id, initialSession.user);
           }
           setLoading(false);
         }
       } catch (error: any) {
-        console.error("[Auth:Init] Erro:", error.message);
         if (isMounted) {
           if (timeoutRef.current) clearTimeout(timeoutRef.current);
           setAuthError(error.message || "Erro ao inicializar autenticação.");
@@ -118,14 +123,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initialize();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
+      async (event, currentSession) => {
         if (!isMounted) return;
 
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
           if (currentSession?.user) {
-            fetchUserProfileBackground(currentSession.user.id, currentSession.user);
+            await fetchUserProfileBackground(currentSession.user.id, currentSession.user);
           }
           setLoading(false);
         } else if (event === 'SIGNED_OUT') {
@@ -156,7 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshProfile = async () => {
     if (user) {
-      fetchUserProfileBackground(user.id, user);
+      await fetchUserProfileBackground(user.id, user);
     }
   };
 
