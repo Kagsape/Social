@@ -27,11 +27,14 @@ const Login = () => {
   }, [user, userProfile, authLoading, navigate]);
 
   const handleGoogleLogin = async () => {
-    if (submitting) return;
     const isNative = Capacitor.isNativePlatform();
+    
+    // URL de retorno configurada no Supabase
     const redirectTo = isNative 
       ? 'com.ciep165.app://auth/callback' 
       : `${window.location.origin}/auth/callback`;
+
+    console.log('[Login] Iniciando Google Login. Nativo:', isNative);
 
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -45,6 +48,7 @@ const Login = () => {
       if (error) throw error;
 
       if (isNative && data?.url) {
+        console.log('[Login] Abrindo navegador externo manualmente:', data.url);
         window.location.href = data.url;
       }
     } catch (error: any) {
@@ -54,8 +58,6 @@ const Login = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
-
     const cleanId = registrationId.trim();
     const cleanPass = password.trim();
 
@@ -82,14 +84,12 @@ const Login = () => {
 
       const targetEmail = `${cleanId}@ciep165.app`;
 
-      // Tenta entrar primeiro
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: targetEmail,
         password: cleanPass,
       });
 
-      // Se não existir, tenta cadastrar
-      if (signInError && (signInError.message.includes("Invalid login credentials") || signInError.message.includes("Email not confirmed"))) {
+      if (signInError && signInError.message.includes("Invalid login credentials")) {
         const { error: signUpError } = await supabase.auth.signUp({
           email: targetEmail,
           password: cleanPass,
@@ -102,19 +102,8 @@ const Login = () => {
           }
         });
         
-        if (signUpError) {
-          // Se o erro for que o usuário já existe, tentamos logar de novo (pode ser um erro de confirmação pendente)
-          if (signUpError.message.includes("User already registered")) {
-             const { error: retryError } = await supabase.auth.signInWithPassword({
-                email: targetEmail,
-                password: cleanPass,
-              });
-              if (retryError) throw retryError;
-          } else {
-            throw signUpError;
-          }
-        }
-        showSuccess("Acesso realizado com sucesso!");
+        if (signUpError) throw signUpError;
+        showSuccess("Primeiro acesso realizado com sucesso!");
       } else if (signInError) {
         throw signInError;
       }
