@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Plus, Minus } from 'lucide-react';
 
 interface InventoryFormProps {
   item?: any;
@@ -37,6 +37,13 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSuccess }) => {
       });
     }
   }, [item]);
+
+  const updateQuantity = (field: 'total_quantity' | 'available_quantity', delta: number) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: Math.max(0, prev[field] + delta)
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,26 +97,68 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSuccess }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="total">Qtd. Total</Label>
-          <Input 
-            id="total" 
-            type="number" 
-            value={formData.total_quantity} 
-            onChange={(e) => setFormData({...formData, total_quantity: parseInt(e.target.value)})} 
-            required 
-          />
+          <div className="flex items-center gap-2">
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="icon" 
+              className="h-10 w-10 shrink-0"
+              onClick={() => updateQuantity('total_quantity', -1)}
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+            <Input 
+              id="total" 
+              type="number" 
+              value={formData.total_quantity} 
+              onChange={(e) => setFormData({...formData, total_quantity: parseInt(e.target.value) || 0})} 
+              className="text-center font-bold"
+              required 
+            />
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="icon" 
+              className="h-10 w-10 shrink-0"
+              onClick={() => updateQuantity('total_quantity', 1)}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         <div className="space-y-2">
           <Label htmlFor="available">Qtd. Disponível</Label>
-          <Input 
-            id="available" 
-            type="number" 
-            value={formData.available_quantity} 
-            onChange={(e) => setFormData({...formData, available_quantity: parseInt(e.target.value)})} 
-            required 
-          />
+          <div className="flex items-center gap-2">
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="icon" 
+              className="h-10 w-10 shrink-0"
+              onClick={() => updateQuantity('available_quantity', -1)}
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+            <Input 
+              id="available" 
+              type="number" 
+              value={formData.available_quantity} 
+              onChange={(e) => setFormData({...formData, available_quantity: parseInt(e.target.value) || 0})} 
+              className="text-center font-bold"
+              required 
+            />
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="icon" 
+              className="h-10 w-10 shrink-0"
+              onClick={() => updateQuantity('available_quantity', 1)}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -141,7 +190,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSuccess }) => {
         </div>
       </div>
 
-      <Button type="submit" className="w-full gap-2" disabled={loading}>
+      <Button type="submit" className="w-full gap-2 h-12 font-bold" disabled={loading}>
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         {item ? 'Salvar Alterações' : 'Cadastrar Equipamento'}
       </Button>
