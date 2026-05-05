@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   Plus, 
   Search, 
@@ -14,7 +15,11 @@ import {
   Monitor, 
   Trash2,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  BarChart3,
+  Wrench,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import InventoryItemCard from '@/components/InventoryItemCard';
 import InventoryForm from '@/components/InventoryForm';
@@ -94,6 +99,19 @@ const Inventory = () => {
     fetchComputers();
   }, [fetchItems, fetchComputers]);
 
+  const stats = useMemo(() => {
+    const totalItems = items.reduce((acc, i) => acc + i.total_quantity, 0);
+    const lowStockItems = items.filter(i => i.available_quantity <= 2 && i.available_quantity > 0).length;
+    const outOfStockItems = items.filter(i => i.available_quantity === 0).length;
+    
+    const totalComps = computers.length;
+    const workingComps = computers.filter(c => c.status === 'working').length;
+    const brokenComps = computers.filter(c => c.status === 'broken').length;
+    const maintenanceComps = computers.filter(c => c.status === 'maintenance').length;
+
+    return { totalItems, lowStockItems, outOfStockItems, totalComps, workingComps, brokenComps, maintenanceComps };
+  }, [items, computers]);
+
   const handleDeleteItem = async (id: string) => {
     if (!confirm('Excluir este item permanentemente?')) return;
     try {
@@ -162,8 +180,56 @@ const Inventory = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Recursos do Laboratório</h1>
-            <p className="text-muted-foreground">Visualização de computadores e equipamentos da sala de informática.</p>
+            <p className="text-muted-foreground">Gestão completa de ativos e infraestrutura tecnológica.</p>
           </div>
+        </div>
+
+        {/* Dashboard Summary */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600">
+                <Monitor className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Computadores</p>
+                <p className="text-xl font-black">{stats.workingComps}<span className="text-xs text-muted-foreground font-normal">/{stats.totalComps}</span></p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600">
+                <XCircle className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Quebrados</p>
+                <p className="text-xl font-black">{stats.brokenComps}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-600">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Estoque Baixo</p>
+                <p className="text-xl font-black">{stats.lowStockItems}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-green-600">
+                <Package className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Total Itens</p>
+                <p className="text-xl font-black">{stats.totalItems}</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -181,7 +247,7 @@ const Inventory = () => {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input 
-                  placeholder="Buscar computador..." 
+                  placeholder="Buscar computador por nome ou localização..." 
                   className="pl-10 rounded-xl"
                   value={compSearch}
                   onChange={(e) => setCompSearch(e.target.value)}
@@ -215,13 +281,13 @@ const Inventory = () => {
                   <div key={comp.id} className="relative group">
                     <LabComputerCard 
                       computer={comp} 
-                      onMaintain={(id) => updateCompStatus(id, 'maintenance')}
+                      onMaintain={(id) => updateCompStatus(id, comp.status === 'working' ? 'maintenance' : 'working')}
                       showActions={isAdmin}
                     />
                     {isAdmin && (
                       <Button 
                         variant="destructive" size="icon" 
-                        className="absolute -top-2 -right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                        className="absolute -top-2 -right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
                         onClick={() => deleteComputer(comp.id)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -238,7 +304,7 @@ const Inventory = () => {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input 
-                  placeholder="Buscar equipamento..." 
+                  placeholder="Buscar equipamento por nome ou categoria..." 
                   className="pl-10 rounded-xl"
                   value={itemSearch}
                   onChange={(e) => setItemSearch(e.target.value)}
