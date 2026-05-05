@@ -6,182 +6,108 @@ import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { 
   Plus, 
   Search, 
   Package, 
   Loader2, 
   Monitor, 
-  Trash2,
   AlertCircle,
   RefreshCw,
-  BarChart3,
-  Wrench,
-  CheckCircle2,
-  XCircle
+  XCircle,
+  Filter
 } from 'lucide-react';
 import InventoryItemCard from '@/components/InventoryItemCard';
 import InventoryForm from '@/components/InventoryForm';
-import LabComputerCard from '@/components/LabComputerCard';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
-  DialogFooter
+  DialogDescription
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showSuccess, showError } from '@/utils/toast';
 
 const Inventory = () => {
   const { isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState('computers');
-  
-  // State para Equipamentos
-  const [items, setItems] = useState<any[]>([]);
-  const [itemsLoading, setItemsLoading] = useState(true);
-  const [itemError, setItemError] = useState<string | null>(null);
-  const [itemSearch, setItemSearch] = useState('');
-  const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [assets, setAssets] = useState<any[]>([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<any>(null);
 
-  // State para Computadores
-  const [computers, setComputers] = useState<any[]>([]);
-  const [compLoading, setCompLoading] = useState(true);
-  const [compError, setCompError] = useState<string | null>(null);
-  const [compSearch, setCompSearch] = useState('');
-  const [isCompDialogOpen, setIsCompDialogOpen] = useState(false);
-  const [isAddingComp, setIsAddingComp] = useState(false);
-
-  const fetchItems = useCallback(async () => {
-    setItemsLoading(true);
-    setItemError(null);
+  const fetchAllAssets = useCallback(async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('inventory_items')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      setItems(data || []);
-    } catch (error: any) {
-      console.error('Erro ao buscar inventário:', error);
-      setItemError(error.message || 'Erro ao carregar equipamentos');
-    } finally {
-      setItemsLoading(false);
-    }
-  }, []);
+      const [itemsRes, compsRes] = await Promise.all([
+        supabase.from('inventory_items').select('*'),
+        supabase.from('lab_computers').select('*')
+      ]);
 
-  const fetchComputers = useCallback(async () => {
-    setCompLoading(true);
-    setCompError(null);
-    try {
-      const { data, error } = await supabase
-        .from('lab_computers')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      setComputers(data || []);
-    } catch (error: any) {
-      console.error('Erro ao buscar computadores:', error);
-      setCompError(error.message || 'Erro ao carregar computadores');
+      const combined = [
+        ...(itemsRes.data || []).map(i => ({ ...i, assetType: 'item' })),
+        ...(compsRes.data || []).map(c => ({ ...c, assetType: 'computer' }))
+      ];
+
+      setAssets(combined.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (error) {
+      showError('Erro ao carregar inventário.');
     } finally {
-      setCompLoading(false);
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchItems();
-    fetchComputers();
-  }, [fetchItems, fetchComputers]);
+    fetchAllAssets();
+  }, [fetchAllAssets]);
 
   const stats = useMemo(() => {
-    const totalItems = items.reduce((acc, i) => acc + i.total_quantity, 0);
-    const lowStockItems = items.filter(i => i.available_quantity <= 2 && i.available_quantity > 0).length;
-    const outOfStockItems = items.filter(i => i.available_quantity === 0).length;
+    const comps = assets.filter(a => a.assetType === 'computer');
+    const items = assets.filter(a => a.assetType === 'item');
     
-    const totalComps = computers.length;
-    const workingComps = computers.filter(c => c.status === 'working').length;
-    const brokenComps = computers.filter(c => c.status === 'broken').length;
-    const maintenanceComps = computers.filter(c => c.status === 'maintenance').length;
+    return {
+      totalComps: comps.length,
+      workingComps: comps.filter(c => c.status === 'working').length,
+      brokenComps: comps.filter(c => c.status === 'broken').length + items.filter(i => i.condition === 'quebrado').length,
+      lowStock: items.filter(i => i.available_quantity <= 2 && i.available_quantity > 0).length
+    };
+  }, [assets]);
 
-    return { totalItems, lowStockItems, outOfStockItems, totalComps, workingComps, brokenComps, maintenanceComps };
-  }, [items, computers]);
-
-  const handleDeleteItem = async (id: string) => {
-    if (!confirm('Excluir este item permanentemente?')) return;
+  const handleDelete = async (id: string, type: 'computer' | 'item') => {
+    if (!confirm('Excluir este registro permanentemente?')) return;
     try {
-      const { error } = await supabase.from('inventory_items').delete().eq('id', id);
+      const table = type === 'computer' ? 'lab_computers' : 'inventory_items';
+      const { error } = await supabase.from(table).delete().eq('id', id);
       if (error) throw error;
-      showSuccess('Item removido.');
-      fetchItems();
-    } catch (error) {
-      showError('Erro ao remover item.');
-    }
-  };
-
-  const handleAddComputer = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsAddingComp(true);
-    const formData = new FormData(e.currentTarget);
-    
-    try {
-      const { error } = await supabase.from('lab_computers').insert({
-        name: formData.get('name') as string,
-        location: formData.get('location') as string,
-        status: 'working',
-        specs: { info: formData.get('specs') as string }
-      });
-
-      if (error) throw error;
-      showSuccess('Computador cadastrado!');
-      setIsCompDialogOpen(false);
-      fetchComputers();
-    } catch (error: any) {
-      showError(error.message);
-    } finally {
-      setIsAddingComp(false);
-    }
-  };
-
-  const updateCompStatus = async (id: string, status: string) => {
-    try {
-      const { error } = await supabase.from('lab_computers').update({ status }).eq('id', id);
-      if (error) throw error;
-      showSuccess('Status atualizado!');
-      fetchComputers();
-    } catch (error) {
-      showError('Erro ao atualizar.');
-    }
-  };
-
-  const deleteComputer = async (id: string) => {
-    if (!confirm('Excluir este computador?')) return;
-    try {
-      const { error } = await supabase.from('lab_computers').delete().eq('id', id);
-      if (error) throw error;
-      showSuccess('Removido!');
-      fetchComputers();
+      showSuccess('Removido com sucesso.');
+      fetchAllAssets();
     } catch (error) {
       showError('Erro ao remover.');
     }
   };
 
-  const filteredItems = items.filter(i => i.name.toLowerCase().includes(itemSearch.toLowerCase()));
-  const filteredComps = computers.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
+  const filteredAssets = assets.filter(asset => {
+    const matchesSearch = asset.name.toLowerCase().includes(search.toLowerCase());
+    const matchesFilter = filter === 'all' || asset.assetType === filter;
+    return matchesSearch && matchesFilter;
+  });
 
   return (
     <Layout>
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Recursos do Laboratório</h1>
-            <p className="text-muted-foreground">Gestão completa de ativos e infraestrutura tecnológica.</p>
+            <h1 className="text-3xl font-bold tracking-tight">Gestão de Ativos</h1>
+            <p className="text-muted-foreground">Controle unificado de computadores e equipamentos.</p>
           </div>
+          {isAdmin && (
+            <Button className="gap-2 rounded-xl" onClick={() => { setEditingAsset(null); setIsDialogOpen(true); }}>
+              <Plus className="h-4 w-4" /> Novo Ativo
+            </Button>
+          )}
         </div>
 
         {/* Dashboard Summary */}
@@ -203,7 +129,7 @@ const Inventory = () => {
                 <XCircle className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Quebrados</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Inoperantes</p>
                 <p className="text-xl font-black">{stats.brokenComps}</p>
               </div>
             </CardContent>
@@ -215,7 +141,7 @@ const Inventory = () => {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase">Estoque Baixo</p>
-                <p className="text-xl font-black">{stats.lowStockItems}</p>
+                <p className="text-xl font-black">{stats.lowStock}</p>
               </div>
             </CardContent>
           </Card>
@@ -225,171 +151,63 @@ const Inventory = () => {
                 <Package className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Total Itens</p>
-                <p className="text-xl font-black">{stats.totalItems}</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Total Ativos</p>
+                <p className="text-xl font-black">{assets.length}</p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-muted/50 p-1 rounded-xl">
-            <TabsTrigger value="computers" className="gap-2 rounded-lg">
-              <Monitor className="h-4 w-4" /> Computadores
-            </TabsTrigger>
-            <TabsTrigger value="items" className="gap-2 rounded-lg">
-              <Package className="h-4 w-4" /> Equipamentos
-            </TabsTrigger>
-          </TabsList>
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Buscar por nome, categoria ou localização..." 
+              className="pl-10 rounded-xl"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Tabs value={filter} onValueChange={setFilter} className="w-fit">
+            <TabsList className="bg-muted/50 p-1 rounded-xl">
+              <TabsTrigger value="all" className="rounded-lg">Tudo</TabsTrigger>
+              <TabsTrigger value="computer" className="rounded-lg gap-2"><Monitor className="h-3 w-3" /> PCs</TabsTrigger>
+              <TabsTrigger value="item" className="rounded-lg gap-2"><Package className="h-3 w-3" /> Itens</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
 
-          <TabsContent value="computers" className="space-y-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Buscar computador por nome ou localização..." 
-                  className="pl-10 rounded-xl"
-                  value={compSearch}
-                  onChange={(e) => setCompSearch(e.target.value)}
-                />
-              </div>
-              {isAdmin && (
-                <Button className="gap-2 rounded-xl" onClick={() => setIsCompDialogOpen(true)}>
-                  <Plus className="h-4 w-4" /> Novo Computador
-                </Button>
-              )}
-            </div>
+        {loading ? (
+          <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
+        ) : filteredAssets.length === 0 ? (
+          <div className="text-center py-20 border-2 border-dashed rounded-3xl">
+            <Package className="h-12 w-12 mx-auto opacity-20 mb-4" />
+            <p className="text-muted-foreground">Nenhum ativo encontrado com os filtros atuais.</p>
+            <Button variant="link" onClick={() => { setSearch(''); setFilter('all'); }}>Limpar filtros</Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredAssets.map(asset => (
+              <InventoryItemCard 
+                key={`${asset.assetType}-${asset.id}`} 
+                item={asset} 
+                onEdit={(a) => { setEditingAsset(a); setIsDialogOpen(true); }}
+                onDelete={handleDelete}
+                canEdit={isAdmin}
+              />
+            ))}
+          </div>
+        )}
 
-            {compLoading ? (
-              <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
-            ) : compError ? (
-              <div className="text-center py-20 bg-destructive/5 rounded-3xl border border-destructive/20">
-                <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
-                <p className="text-destructive font-medium mb-4">{compError}</p>
-                <Button variant="outline" onClick={fetchComputers} className="gap-2">
-                  <RefreshCw className="h-4 w-4" /> Tentar Novamente
-                </Button>
-              </div>
-            ) : filteredComps.length === 0 ? (
-              <div className="text-center py-20 border-2 border-dashed rounded-3xl">
-                <Monitor className="h-12 w-12 mx-auto opacity-20 mb-4" />
-                <p className="text-muted-foreground">Nenhum computador encontrado.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredComps.map(comp => (
-                  <div key={comp.id} className="relative group">
-                    <LabComputerCard 
-                      computer={comp} 
-                      onMaintain={(id) => updateCompStatus(id, comp.status === 'working' ? 'maintenance' : 'working')}
-                      showActions={isAdmin}
-                    />
-                    {isAdmin && (
-                      <Button 
-                        variant="destructive" size="icon" 
-                        className="absolute -top-2 -right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
-                        onClick={() => deleteComputer(comp.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="items" className="space-y-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Buscar equipamento por nome ou categoria..." 
-                  className="pl-10 rounded-xl"
-                  value={itemSearch}
-                  onChange={(e) => setItemSearch(e.target.value)}
-                />
-              </div>
-              {isAdmin && (
-                <Button className="gap-2 rounded-xl" onClick={() => { setEditingItem(null); setIsItemDialogOpen(true); }}>
-                  <Plus className="h-4 w-4" /> Novo Item
-                </Button>
-              )}
-            </div>
-
-            {itemsLoading ? (
-              <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
-            ) : itemError ? (
-              <div className="text-center py-20 bg-destructive/5 rounded-3xl border border-destructive/20">
-                <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
-                <p className="text-destructive font-medium mb-4">{itemError}</p>
-                <Button variant="outline" onClick={fetchItems} className="gap-2">
-                  <RefreshCw className="h-4 w-4" /> Tentar Novamente
-                </Button>
-              </div>
-            ) : filteredItems.length === 0 ? (
-              <div className="text-center py-20 border-2 border-dashed rounded-3xl">
-                <Package className="h-12 w-12 mx-auto opacity-20 mb-4" />
-                <p className="text-muted-foreground">Nenhum equipamento encontrado.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredItems.map(item => (
-                  <InventoryItemCard 
-                    key={item.id} 
-                    item={item} 
-                    onEdit={(i) => { setEditingItem(i); setIsItemDialogOpen(true); }}
-                    onDelete={handleDeleteItem}
-                    canEdit={isAdmin}
-                    canDelete={isAdmin}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-
-        <Dialog open={isItemDialogOpen} onOpenChange={setIsItemDialogOpen}>
-          <DialogContent className="sm:max-w-[500px]">
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
-              <DialogTitle>{editingItem ? 'Editar Item' : 'Novo Equipamento'}</DialogTitle>
+              <DialogTitle>{editingAsset ? 'Editar Ativo' : 'Novo Ativo'}</DialogTitle>
               <DialogDescription>
-                {editingItem ? 'Atualize as informações do equipamento selecionado.' : 'Preencha os dados para cadastrar um novo equipamento no inventário.'}
+                Gerencie as informações do patrimônio da sala de informática.
               </DialogDescription>
             </DialogHeader>
-            <InventoryForm item={editingItem} onSuccess={() => { setIsItemDialogOpen(false); fetchItems(); }} />
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={isCompDialogOpen} onOpenChange={setIsCompDialogOpen}>
-          <DialogContent>
-            <form onSubmit={handleAddComputer}>
-              <DialogHeader>
-                <DialogTitle>Novo Computador</DialogTitle>
-                <DialogDescription>
-                  Adicione uma nova estação de trabalho ao laboratório de informática.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Identificação</Label>
-                  <Input id="name" name="name" placeholder="Ex: PC-01" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="location">Localização</Label>
-                  <Input id="location" name="location" placeholder="Ex: Fila A" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="specs">Especificações</Label>
-                  <Input id="specs" name="specs" placeholder="Ex: i5, 8GB RAM" />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={isAddingComp}>
-                  {isAddingComp ? 'Salvando...' : 'Cadastrar'}
-                </Button>
-              </DialogFooter>
-            </form>
+            <InventoryForm item={editingAsset} onSuccess={() => { setIsDialogOpen(false); fetchAllAssets(); }} />
           </DialogContent>
         </Dialog>
       </div>
