@@ -21,7 +21,8 @@ import {
   BookOpen,
   Trash2,
   PlayCircle,
-  MessageSquare
+  MessageSquare,
+  Heart
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -32,7 +33,7 @@ import ProjectUpdateComments from '@/components/ProjectUpdateComments';
 const ProjectDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, userProfile, isAdmin } = useAuth();
   const [project, setProject] = useState<any>(null);
   const [updates, setUpdates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,11 +59,20 @@ const ProjectDetails = () => {
 
       const { data: updatesData } = await supabase
         .from('project_updates')
-        .select('*')
+        .select(`
+          *,
+          project_update_likes (user_id)
+        `)
         .eq('project_id', id)
         .order('created_at', { ascending: false });
       
-      setUpdates(updatesData || []);
+      const processedUpdates = (updatesData || []).map(update => ({
+        ...update,
+        likes_count: update.project_update_likes?.length || 0,
+        has_liked: update.project_update_likes?.some((l: any) => l.user_id === user?.id) || false
+      }));
+
+      setUpdates(processedUpdates);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -72,7 +82,7 @@ const ProjectDetails = () => {
 
   useEffect(() => {
     fetchData();
-  }, [id]);
+  }, [id, user?.id]);
 
   const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -139,6 +149,50 @@ const ProjectDetails = () => {
       showError(error.message || 'Erro ao salvar atualização.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const toggleLike = async (update: any) => {
+    if (!user) return;
+    const hasLiked = update.has_liked;
+
+    // Atualização otimista
+    setUpdates(prev => prev.map(u => {
+      if (u.id === update.id) {
+        return {
+          ...u,
+          has_liked: !hasLiked,
+          likes_count: hasLiked ? u.likes_count - 1 : u.likes_count + 1
+        };
+      }
+      return u;
+    }));
+
+    try {
+      if (hasLiked) {
+        await supabase
+          .from('project_update_likes')
+          .delete()
+          .eq('update_id', update.id)
+          .eq('user_id', user.id);
+      } else {
+        await supabase
+          .from('project_update_likes')
+          .insert({ update_id: update.id, user_id: user.id });
+        
+        // Notificar o autor do projeto
+        if (project.user_id !== user.id) {
+          await supabase.from('notifications').insert({
+            user_id: project.user_id,
+            actor_id: user.id,
+            type: 'like',
+            message: `${userProfile?.name} curtiu uma atualização no seu projeto "${project.title}".`
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao processar like:', error);
+      // Reverter em caso de erro real (opcional, fetchData resolverá)
     }
   };
 
@@ -337,7 +391,18 @@ const ProjectDetails = () => {
                               </div>
                             )}
 
-                            <div className="pt-4 border-t flex items-center gap-4">
+                            <div className="pt-4 border-t flex items-center gap-6">
+                              <button 
+                                onClick={() => toggleLike(update)}
+                                className={cn(
+                                  "flex items-center gap-2 text-xs font-bold transition-all active:scale-125",
+                                  update.has_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
+                                )}
+                              >
+                                <Heart className={cn("h-4 w-4 transition-transform", update.has_liked && "fill-current scale-110")} />
+                                <span>{update.likes_count} Curtidas</span>
+                              </button>
+                              
                               <button 
                                 onClick={() => toggleComments(update.id)}
                                 className={cn(
