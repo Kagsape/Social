@@ -47,7 +47,7 @@ const Projects = () => {
       
       if (error) throw error;
       setProjects(data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao buscar projetos:', error);
     } finally {
       setLoading(false);
@@ -89,7 +89,9 @@ const Projects = () => {
           .from('uploads')
           .upload(filePath, imageFile);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          throw new Error(`Erro no upload da imagem: ${uploadError.message}. Verifique se o bucket 'uploads' existe e é público.`);
+        }
 
         const { data: { publicUrl } } = supabase.storage
           .from('uploads')
@@ -98,32 +100,38 @@ const Projects = () => {
         imageUrl = publicUrl;
       }
 
-      const { error } = await supabase
+      const { error: insertError } = await supabase
         .from('projects')
         .insert({
           title: formData.get('title'),
           description: formData.get('description'),
-          link: formData.get('link'),
           image_url: imageUrl,
           user_id: user.id,
           tags: ['Em Desenvolvimento']
         });
 
-      if (error) throw error;
+      if (insertError) {
+        throw new Error(`Erro ao salvar no banco: ${insertError.message}`);
+      }
 
-      await supabase.rpc('increment_user_points', { 
-        user_id: user.id, 
-        points_to_add: 50 
-      });
+      // Tenta dar pontos, mas não trava o processo se falhar
+      try {
+        await supabase.rpc('increment_user_points', { 
+          user_id: user.id, 
+          points_to_add: 50 
+        });
+      } catch (rpcErr) {
+        console.warn('Não foi possível adicionar pontos, mas o projeto foi criado.');
+      }
 
-      showSuccess('Diário de projeto iniciado! Você ganhou 50 pontos.');
+      showSuccess('Diário de projeto iniciado!');
       setIsDialogOpen(false);
       setImageFile(null);
       setImagePreview(null);
       fetchProjects();
-    } catch (error) {
-      console.error('Erro ao iniciar projeto:', error);
-      showError('Erro ao iniciar projeto.');
+    } catch (error: any) {
+      console.error('Erro completo:', error);
+      showError(error.message || 'Erro ao iniciar projeto.');
     } finally {
       setSubmitting(false);
     }
