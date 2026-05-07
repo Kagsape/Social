@@ -15,11 +15,13 @@ import {
   ArrowLeft, 
   Plus, 
   Image as ImageIcon, 
+  Video as VideoIcon,
   X, 
   Calendar, 
   History,
   BookOpen,
-  Trash2
+  Trash2,
+  PlayCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -34,8 +36,9 @@ const ProjectDetails = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [newUpdate, setNewUpdate] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,12 +72,14 @@ const ProjectDetails = () => {
     fetchData();
   }, [id]);
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setImageFile(file);
+      const isVideo = file.type.startsWith('video/');
+      setMediaFile(file);
+      setMediaType(isVideo ? 'video' : 'image');
       const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.onloadend = () => setMediaPreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -85,14 +90,18 @@ const ProjectDetails = () => {
 
     setSubmitting(true);
     try {
-      let imageUrl = null;
-      if (imageFile) {
-        const fileName = `${Math.random()}.${imageFile.name.split('.').pop()}`;
+      let mediaUrl = null;
+      if (mediaFile) {
+        const fileExt = mediaFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const folder = mediaType === 'video' ? 'project_videos' : 'project_logs';
+        
         const { error: uploadError } = await supabase.storage
           .from('uploads')
-          .upload(`project_logs/${fileName}`, imageFile);
+          .upload(`${folder}/${fileName}`, mediaFile);
+        
         if (uploadError) throw uploadError;
-        imageUrl = supabase.storage.from('uploads').getPublicUrl(`project_logs/${fileName}`).data.publicUrl;
+        mediaUrl = supabase.storage.from('uploads').getPublicUrl(`${folder}/${fileName}`).data.publicUrl;
       }
 
       const { error } = await supabase
@@ -100,18 +109,19 @@ const ProjectDetails = () => {
         .insert({
           project_id: id,
           content: newUpdate.trim(),
-          image_url: imageUrl
+          image_url: mediaUrl // Usamos a mesma coluna para simplificar, o código detectará o tipo na exibição
         });
 
       if (error) throw error;
 
-      showSuccess('Parte do projeto lançada!');
+      showSuccess('Progresso registrado no diário!');
       setNewUpdate('');
-      setImageFile(null);
-      setImagePreview(null);
+      setMediaFile(null);
+      setMediaPreview(null);
+      setMediaType(null);
       fetchData();
-    } catch (error) {
-      showError('Erro ao salvar atualização.');
+    } catch (error: any) {
+      showError(error.message || 'Erro ao salvar atualização.');
     } finally {
       setSubmitting(false);
     }
@@ -126,6 +136,11 @@ const ProjectDetails = () => {
     } catch (error) {
       showError('Erro ao excluir.');
     }
+  };
+
+  const isVideoUrl = (url: string) => {
+    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
+    return videoExtensions.some(ext => url.toLowerCase().includes(ext)) || url.includes('project_videos');
   };
 
   if (loading) return <Layout><div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10" /></div></Layout>;
@@ -184,19 +199,38 @@ const ProjectDetails = () => {
                     className="bg-white dark:bg-slate-900 rounded-xl border-none shadow-inner"
                     rows={3}
                   />
-                  {imagePreview && (
+                  
+                  {mediaPreview && (
                     <div className="relative w-fit">
-                      <img src={imagePreview} alt="Preview" className="max-h-40 rounded-lg border" />
-                      <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full" onClick={() => { setImagePreview(null); setImageFile(null); }}>
+                      {mediaType === 'video' ? (
+                        <div className="relative rounded-lg border overflow-hidden bg-black aspect-video max-h-48">
+                          <video src={mediaPreview} className="h-full w-full" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                            <PlayCircle className="h-10 w-10 text-white opacity-80" />
+                          </div>
+                        </div>
+                      ) : (
+                        <img src={mediaPreview} alt="Preview" className="max-h-40 rounded-lg border" />
+                      )}
+                      <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow-lg" onClick={() => { setMediaPreview(null); setMediaFile(null); setMediaType(null); }}>
                         <X className="h-3 w-3" />
                       </Button>
                     </div>
                   )}
+
                   <div className="flex justify-between items-center">
-                    <Button variant="ghost" size="sm" className="gap-2 rounded-full" onClick={() => fileInputRef.current?.click()}>
-                      <ImageIcon className="h-4 w-4" /> Adicionar Foto
-                    </Button>
-                    <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageSelect} />
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" className="gap-2 rounded-full" onClick={() => fileInputRef.current?.click()}>
+                        <ImageIcon className="h-4 w-4" /> Mídia
+                      </Button>
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*,video/*" 
+                      className="hidden" 
+                      ref={fileInputRef} 
+                      onChange={handleMediaSelect} 
+                    />
                     <Button onClick={handleAddUpdate} disabled={submitting || !newUpdate.trim()} className="rounded-full px-6">
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
                       Lançar no Diário
@@ -212,7 +246,7 @@ const ProjectDetails = () => {
                   Nenhuma atualização lançada ainda.
                 </div>
               ) : (
-                updates.map((update, index) => (
+                updates.map((update) => (
                   <div key={update.id} className="relative pl-12 animate-in fade-in slide-in-from-left-4">
                     <div className="absolute left-0 top-1 h-8 w-8 rounded-full bg-white dark:bg-slate-900 border-2 border-primary flex items-center justify-center z-10">
                       <div className="h-2 w-2 rounded-full bg-primary" />
@@ -236,7 +270,19 @@ const ProjectDetails = () => {
                           </p>
                           {update.image_url && (
                             <div className="rounded-xl overflow-hidden border bg-muted/30">
-                              <img src={update.image_url} alt="Update" className="w-full h-auto max-h-[400px] object-contain mx-auto" />
+                              {isVideoUrl(update.image_url) ? (
+                                <video 
+                                  src={update.image_url} 
+                                  controls 
+                                  className="w-full h-auto max-h-[500px] bg-black"
+                                />
+                              ) : (
+                                <img 
+                                  src={update.image_url} 
+                                  alt="Update" 
+                                  className="w-full h-auto max-h-[500px] object-contain mx-auto" 
+                                />
+                              )}
                             </div>
                           )}
                         </CardContent>
