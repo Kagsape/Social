@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Edit3, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Edit3, Plus, Trash2, Tag } from 'lucide-react';
 
 interface AdminCourseFormProps {
   courseId?: string;
@@ -39,11 +39,14 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
     name: '',
     code: '',
     description: '',
-    teacher_id: ''
+    teacher_id: '',
+    category: 'Tecnologia'
   });
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const categories = ["Tecnologia", "Programação", "Hardware", "Design", "Robótica", "Básico", "Outros"];
 
   useEffect(() => {
     if (isDialogOpen) {
@@ -55,7 +58,8 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
           name: '', 
           code: '', 
           description: '', 
-          teacher_id: user?.id || '' 
+          teacher_id: user?.id || '',
+          category: 'Tecnologia'
         });
       }
     }
@@ -90,7 +94,8 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
           name: data.name,
           code: data.code,
           description: data.description || '',
-          teacher_id: data.teacher_id || data.created_by || ''
+          teacher_id: data.teacher_id || data.created_by || '',
+          category: data.category || 'Tecnologia'
         });
       }
     } catch (error) {
@@ -108,7 +113,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
         code: formData.code.trim(),
         description: formData.description.trim() || null,
         teacher_id: formData.teacher_id || user?.id,
-        category: 'Tecnologia'
+        category: formData.category
       };
 
       if (courseId) {
@@ -166,12 +171,12 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
-        <Button variant={courseId ? "ghost" : "default"} className={courseId ? "w-full justify-start gap-2" : "gap-2"}>
+        <Button variant={courseId ? "ghost" : "default"} className={courseId ? "w-full justify-start gap-2" : "gap-2 rounded-xl"}>
           {courseId ? <Edit3 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
           {courseId ? 'Editar Curso' : 'Novo Curso'}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl rounded-2xl">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>{courseId ? 'Gerenciar Curso' : 'Criar Novo Curso'}</DialogTitle>
@@ -182,31 +187,57 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome do Curso</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                required
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome do Curso</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  placeholder="Ex: Introdução ao Python"
+                  required
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="code">Código</Label>
+                <Input
+                  id="code"
+                  value={formData.code}
+                  onChange={(e) => setFormData({...formData, code: e.target.value})}
+                  placeholder="Ex: PY-101"
+                  required
+                  className="rounded-xl font-mono"
+                />
+              </div>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="code">Código</Label>
-              <Input
-                id="code"
-                value={formData.code}
-                onChange={(e) => setFormData({...formData, code: e.target.value})}
-                required
-              />
+              <Label htmlFor="category">Categoria</Label>
+              <Select 
+                value={formData.category} 
+                onValueChange={(value) => setFormData({...formData, category: value})}
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="description">Descrição</Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({...formData, description: e.target.value})}
+                placeholder="O que os alunos aprenderão neste curso?"
                 rows={3}
+                className="rounded-xl"
               />
             </div>
             
@@ -217,7 +248,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
                   value={formData.teacher_id} 
                   onValueChange={(value) => setFormData({...formData, teacher_id: value})}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="rounded-xl">
                     <SelectValue placeholder="Selecione um professor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -236,7 +267,7 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
               <Button 
                 type="button" 
                 variant="destructive" 
-                className="sm:mr-auto gap-2" 
+                className="sm:mr-auto gap-2 rounded-xl" 
                 onClick={handleDelete}
                 disabled={deleting || loading}
               >
@@ -244,10 +275,10 @@ const AdminCourseForm: React.FC<AdminCourseFormProps> = ({ courseId, onCourseSav
                 Excluir Curso
               </Button>
             )}
-            <Button variant="outline" type="button" onClick={() => setIsDialogOpen(false)}>
+            <Button variant="outline" type="button" onClick={() => setIsDialogOpen(false)} className="rounded-xl">
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || deleting || !formData.name || !formData.code}>
+            <Button type="submit" disabled={loading || deleting || !formData.name || !formData.code} className="rounded-xl">
               {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Salvar Alterações'}
             </Button>
           </DialogFooter>

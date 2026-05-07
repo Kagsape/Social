@@ -9,7 +9,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from './AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
-import { Loader2, Plus, BookOpen } from 'lucide-react';
+import { Loader2, Plus, BookOpen, Tag } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CreateCourseFormProps {
   onSuccess?: () => void;
@@ -20,9 +27,11 @@ const CreateCourseForm: React.FC<CreateCourseFormProps> = ({ onSuccess }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [code, setCode] = useState('');
+  const [category, setCategory] = useState('Tecnologia');
   const [loading, setLoading] = useState(false);
 
   const isTeacher = userProfile?.role === 'teacher' || userProfile?.role === 'admin';
+  const categories = ["Tecnologia", "Programação", "Hardware", "Design", "Robótica", "Básico", "Outros"];
 
   const createCourse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,8 +47,8 @@ const CreateCourseForm: React.FC<CreateCourseFormProps> = ({ onSuccess }) => {
           description: description.trim(),
           code: code.trim() || `TURMA-${Math.random().toString(36).substring(7).toUpperCase()}`,
           created_by: user.id,
-          teacher_id: user.id, // Mantido para compatibilidade com layouts antigos
-          category: 'Tecnologia'
+          teacher_id: user.id,
+          category: category
         })
         .select()
         .single();
@@ -56,10 +65,11 @@ const CreateCourseForm: React.FC<CreateCourseFormProps> = ({ onSuccess }) => {
 
       if (linkError) throw linkError;
 
-      showSuccess('Curso criado e você foi vinculado como professor!');
+      showSuccess('Curso criado com sucesso!');
       setName('');
       setDescription('');
       setCode('');
+      setCategory('Tecnologia');
       onSuccess?.();
     } catch (error: any) {
       console.error('[CreateCourse] Erro:', error);
@@ -82,27 +92,43 @@ const CreateCourseForm: React.FC<CreateCourseFormProps> = ({ onSuccess }) => {
       </CardHeader>
       <CardContent>
         <form onSubmit={createCourse} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="course-name">Nome do Curso</Label>
-            <Input
-              id="course-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Desenvolvimento Web Fullstack"
-              required
-              className="rounded-xl"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="course-name">Nome do Curso</Label>
+              <Input
+                id="course-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ex: Desenvolvimento Web Fullstack"
+                required
+                className="rounded-xl"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="course-code">Código de Identificação</Label>
+              <Input
+                id="course-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Ex: WEB-101"
+                className="rounded-xl font-mono"
+              />
+            </div>
           </div>
-          
+
           <div className="space-y-2">
-            <Label htmlFor="course-code">Código de Identificação</Label>
-            <Input
-              id="course-code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="Ex: WEB-101"
-              className="rounded-xl font-mono"
-            />
+            <Label htmlFor="course-category">Categoria</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="rounded-xl">
+                <SelectValue placeholder="Selecione uma categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(cat => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
