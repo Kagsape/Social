@@ -21,12 +21,13 @@ import {
   BookOpen,
   Trash2,
   PlayCircle,
-  Layers
+  MessageSquare
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import ProjectUpdateComments from '@/components/ProjectUpdateComments';
 
 const ProjectDetails = () => {
   const { id } = useParams();
@@ -37,8 +38,8 @@ const ProjectDetails = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [newUpdate, setNewUpdate] = useState('');
+  const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
   
-  // Estado para múltiplos arquivos
   const [selectedFiles, setSelectedFiles] = useState<Array<{ file: File, preview: string, type: 'image' | 'video' }>>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,7 +85,6 @@ const ProjectDetails = () => {
     }));
 
     setSelectedFiles(prev => [...prev, ...newFiles]);
-    // Limpa o input para permitir selecionar os mesmos arquivos novamente se desejar
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -105,7 +105,6 @@ const ProjectDetails = () => {
     try {
       const mediaUrls: string[] = [];
 
-      // Upload de todos os arquivos selecionados
       for (const item of selectedFiles) {
         const fileExt = item.file.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
@@ -126,7 +125,6 @@ const ProjectDetails = () => {
         .insert({
           project_id: id,
           content: newUpdate.trim(),
-          // Salvamos na nova coluna media_urls (array) e mantemos image_url para compatibilidade se houver apenas uma
           media_urls: mediaUrls,
           image_url: mediaUrls.length > 0 ? mediaUrls[0] : null
         });
@@ -158,6 +156,13 @@ const ProjectDetails = () => {
   const isVideoUrl = (url: string) => {
     const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
     return videoExtensions.some(ext => url.toLowerCase().includes(ext)) || url.includes('project_videos');
+  };
+
+  const toggleComments = (updateId: string) => {
+    setActiveComments(prev => ({
+      ...prev,
+      [updateId]: !prev[updateId]
+    }));
   };
 
   if (loading) return <Layout><div className="flex justify-center py-20"><Loader2 className="animate-spin h-10 w-10" /></div></Layout>;
@@ -271,7 +276,6 @@ const ProjectDetails = () => {
                 </div>
               ) : (
                 updates.map((update) => {
-                  // Prioriza media_urls, mas cai para image_url se media_urls estiver vazio
                   const mediaList = (update.media_urls && update.media_urls.length > 0) 
                     ? update.media_urls 
                     : (update.image_url ? [update.image_url] : []);
@@ -328,6 +332,23 @@ const ProjectDetails = () => {
                                   </div>
                                 ))}
                               </div>
+                            )}
+
+                            <div className="pt-4 border-t flex items-center gap-4">
+                              <button 
+                                onClick={() => toggleComments(update.id)}
+                                className={cn(
+                                  "flex items-center gap-2 text-xs font-bold transition-colors",
+                                  activeComments[update.id] ? "text-primary" : "text-muted-foreground hover:text-primary"
+                                )}
+                              >
+                                <MessageSquare className="h-4 w-4" />
+                                {activeComments[update.id] ? 'Ocultar Comentários' : 'Comentar'}
+                              </button>
+                            </div>
+
+                            {activeComments[update.id] && (
+                              <ProjectUpdateComments updateId={update.id} />
                             )}
                           </CardContent>
                         </Card>
