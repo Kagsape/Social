@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Plus, ExternalLink, Github, Heart, MessageSquare, Loader2, Image as ImageIcon, X } from 'lucide-react';
+import { Plus, Book, Heart, MessageSquare, Loader2, Image as ImageIcon, X, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -105,25 +106,24 @@ const Projects = () => {
           link: formData.get('link'),
           image_url: imageUrl,
           user_id: user.id,
-          tags: ['Projeto']
+          tags: ['Em Desenvolvimento']
         });
 
       if (error) throw error;
 
-      // Incrementar pontos por projeto (50 pontos)
       await supabase.rpc('increment_user_points', { 
         user_id: user.id, 
         points_to_add: 50 
       });
 
-      showSuccess('Projeto compartilhado! Você ganhou 50 pontos.');
+      showSuccess('Diário de projeto iniciado! Você ganhou 50 pontos.');
       setIsDialogOpen(false);
       setImageFile(null);
       setImagePreview(null);
       fetchProjects();
     } catch (error) {
-      console.error('Erro ao publicar projeto:', error);
-      showError('Erro ao publicar projeto.');
+      console.error('Erro ao iniciar projeto:', error);
+      showError('Erro ao iniciar projeto.');
     } finally {
       setSubmitting(false);
     }
@@ -134,40 +134,36 @@ const Projects = () => {
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Galeria de Projetos</h1>
-            <p className="text-muted-foreground">Trabalhos incríveis criados pelos alunos do CIEP 165.</p>
+            <h1 className="text-3xl font-bold tracking-tight">Diários de Projetos</h1>
+            <p className="text-muted-foreground">Acompanhe a jornada de criação dos alunos do CIEP 165.</p>
           </div>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2 rounded-full px-6">
-                <Plus className="h-4 w-4" /> Enviar Projeto
+                <Plus className="h-4 w-4" /> Iniciar Novo Diário
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <form onSubmit={handleAddProject}>
                 <DialogHeader>
-                  <DialogTitle>Compartilhe seu Trabalho</DialogTitle>
+                  <DialogTitle>Começar uma Jornada</DialogTitle>
                   <DialogDescription>
-                    Mostre para a comunidade o que você andou criando na Sala de Informática.
+                    Dê um título e uma descrição geral ao seu projeto. Você poderá postar o progresso depois.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="title">Título do Projeto</Label>
-                    <Input id="title" name="title" placeholder="Ex: Meu Jogo em Scratch" required />
+                    <Label htmlFor="title">Nome do Projeto</Label>
+                    <Input id="title" name="title" placeholder="Ex: Meu Primeiro Robô" required />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="description">Descrição</Label>
-                    <Textarea id="description" name="description" placeholder="Conte um pouco sobre como você fez..." required />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="link">Link (GitHub ou Site)</Label>
-                    <Input id="link" name="link" placeholder="https://..." />
+                    <Label htmlFor="description">Objetivo do Projeto</Label>
+                    <Textarea id="description" name="description" placeholder="O que você pretende criar?" required />
                   </div>
                   
                   <div className="grid gap-2">
-                    <Label>Capa do Projeto</Label>
+                    <Label>Capa (Opcional)</Label>
                     <div 
                       className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:bg-muted/50 transition-colors"
                       onClick={() => fileInputRef.current?.click()}
@@ -188,23 +184,17 @@ const Projects = () => {
                       ) : (
                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
                           <ImageIcon className="h-8 w-8 opacity-50" />
-                          <span className="text-xs">Clique para selecionar uma imagem</span>
+                          <span className="text-xs">Selecione uma imagem de capa</span>
                         </div>
                       )}
                     </div>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      ref={fileInputRef} 
-                      onChange={handleImageSelect}
-                    />
+                    <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageSelect} />
                   </div>
                 </div>
                 <DialogFooter>
                   <Button type="submit" className="w-full" disabled={submitting}>
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    {submitting ? 'Publicando...' : 'Publicar Projeto'}
+                    Começar Diário
                   </Button>
                 </DialogFooter>
               </form>
@@ -218,64 +208,55 @@ const Projects = () => {
           </div>
         ) : projects.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-2xl">
-            Nenhum projeto compartilhado ainda. Seja o primeiro!
+            Nenhum diário iniciado ainda. Comece o seu!
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {projects.map((project) => (
-              <Card key={project.id} className="overflow-hidden border-none shadow-sm hover:shadow-xl transition-all group rounded-2xl">
-                <div className="relative aspect-video overflow-hidden bg-muted flex items-center justify-center">
-                  {project.image_url ? (
-                    <img 
-                      src={project.image_url} 
-                      alt={project.title} 
-                      className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
-                    />
-                  ) : (
-                    <div className="text-muted-foreground flex flex-col items-center gap-2">
-                      <Plus className="h-8 w-8 opacity-20" />
-                      <span className="text-xs">Sem imagem</span>
-                    </div>
-                  )}
-                  <div className="absolute top-3 left-3 flex gap-2">
-                    {project.tags?.map((tag: string) => (
-                      <Badge key={tag} className="bg-black/50 backdrop-blur-md border-none">{tag}</Badge>
-                    ))}
-                  </div>
-                </div>
-                <CardHeader className="p-5 pb-2">
-                  <CardTitle className="text-xl group-hover:text-primary transition-colors">{project.title}</CardTitle>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Avatar className="h-6 w-6">
-                      <AvatarImage src={project.users?.avatar_url} />
-                      <AvatarFallback className="text-[10px]">{project.users?.name?.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <span className="text-xs text-muted-foreground font-medium">por {project.users?.name}</span>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-5 pt-2">
-                  <p className="text-sm text-muted-foreground line-clamp-2">{project.description}</p>
-                </CardContent>
-                <CardFooter className="p-5 pt-0 flex items-center justify-between border-t mt-2">
-                  <div className="flex items-center gap-4">
-                    <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-500 transition-colors">
-                      <Heart className="h-4 w-4" /> {project.likes_count || 0}
-                    </button>
-                    <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
-                      <MessageSquare className="h-4 w-4" /> {project.comments_count || 0}
-                    </button>
-                  </div>
-                  <div className="flex gap-2">
-                    {project.link && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" asChild>
-                        <a href={project.link} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Button>
+              <Link key={project.id} to={`/projects/${project.id}`}>
+                <Card className="overflow-hidden border-none shadow-sm hover:shadow-xl transition-all group rounded-2xl h-full flex flex-col">
+                  <div className="relative aspect-video overflow-hidden bg-muted flex items-center justify-center">
+                    {project.image_url ? (
+                      <img 
+                        src={project.image_url} 
+                        alt={project.title} 
+                        className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="text-muted-foreground flex flex-col items-center gap-2">
+                        <Book className="h-8 w-8 opacity-20" />
+                        <span className="text-xs">Sem capa</span>
+                      </div>
                     )}
+                    <div className="absolute top-3 left-3">
+                      <Badge className="bg-primary/90 backdrop-blur-md border-none">Diário</Badge>
+                    </div>
                   </div>
-                </CardFooter>
-              </Card>
+                  <CardHeader className="p-5 pb-2">
+                    <CardTitle className="text-xl group-hover:text-primary transition-colors line-clamp-1">{project.title}</CardTitle>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage src={project.users?.avatar_url} />
+                        <AvatarFallback className="text-[10px]">{project.users?.name?.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs text-muted-foreground font-medium">por {project.users?.name}</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-5 pt-2 flex-1">
+                    <p className="text-sm text-muted-foreground line-clamp-2">{project.description}</p>
+                  </CardContent>
+                  <CardFooter className="p-5 pt-0 flex items-center justify-between border-t mt-2">
+                    <div className="flex items-center gap-4">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Heart className="h-4 w-4" /> {project.likes_count || 0}
+                      </span>
+                    </div>
+                    <Button variant="ghost" size="sm" className="gap-2 text-primary font-bold">
+                      Ver Diário <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </Link>
             ))}
           </div>
         )}

@@ -31,6 +31,7 @@ import NotFound from "./pages/NotFound";
 import Resources from "./pages/Resources";
 import Leaderboard from "./pages/Leaderboard";
 import Projects from "./pages/Projects";
+import ProjectDetails from "./pages/ProjectDetails";
 import Events from "./pages/Events";
 import Help from "./pages/Help";
 import Search from "./pages/Search";
@@ -60,6 +61,7 @@ const App = () => (
             <Route path="/resources" element={<Resources />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/projects" element={<Projects />} />
+            <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
             <Route path="/events" element={<Events />} />
             <Route path="/help" element={<Help />} />
             
