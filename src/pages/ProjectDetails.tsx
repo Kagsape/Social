@@ -195,8 +195,8 @@ const ProjectDetails = () => {
             </p>
           </div>
           {project.image_url && (
-            <div className="w-full md:w-72 aspect-video rounded-2xl overflow-hidden shadow-lg border">
-              <img src={project.image_url} alt="Capa" className="w-full h-full object-cover" />
+            <div className="w-full md:w-72 aspect-video rounded-2xl overflow-hidden shadow-lg border bg-slate-100 dark:bg-slate-800">
+              <img src={project.image_url} alt="Capa" className="w-full h-full object-contain" />
             </div>
           )}
         </div>
@@ -231,7 +231,7 @@ const ProjectDetails = () => {
                               <PlayCircle className="h-6 w-6 text-white/50" />
                             </div>
                           ) : (
-                            <img src={item.preview} alt="Preview" className="w-full h-full object-cover" />
+                            <img src={item.preview} alt="Preview" className="w-full h-full object-contain bg-slate-200 dark:bg-slate-800" />
                           )}
                           <Button 
                             variant="destructive" 
@@ -312,20 +312,23 @@ const ProjectDetails = () => {
                               )}>
                                 {mediaList.map((url: string, i: number) => (
                                   <div key={i} className={cn(
-                                    "relative bg-muted/30 border overflow-hidden",
-                                    mediaList.length === 1 ? "aspect-video" : "aspect-square"
+                                    "relative bg-slate-100 dark:bg-slate-800/50 border overflow-hidden",
+                                    mediaList.length === 1 ? "min-h-[200px] max-h-[600px]" : "aspect-square"
                                   )}>
                                     {isVideoUrl(url) ? (
                                       <video 
                                         src={url} 
                                         controls 
-                                        className="w-full h-full object-cover bg-black"
+                                        className="w-full h-full object-contain bg-black"
                                       />
                                     ) : (
                                       <img 
                                         src={url} 
                                         alt={`Update ${i}`} 
-                                        className="w-full h-full object-cover" 
+                                        className={cn(
+                                          "w-full object-contain mx-auto",
+                                          mediaList.length === 1 ? "h-auto" : "h-full"
+                                        )}
                                         loading="lazy"
                                       />
                                     )}
@@ -350,7 +353,7 @@ const ProjectDetails = () => {
                             {activeComments[update.id] && (
                               <ProjectUpdateComments 
                                 updateId={update.id} 
-                                canPin={isOwner || isAdmin} // Apenas o dono do projeto ou admin pode fixar
+                                canPin={isOwner || isAdmin}
                               />
                             )}
                           </CardContent>
