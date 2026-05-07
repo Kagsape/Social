@@ -15,17 +15,18 @@ import {
   ArrowLeft, 
   Plus, 
   Image as ImageIcon, 
-  Video as VideoIcon,
   X, 
   Calendar, 
   History,
   BookOpen,
   Trash2,
-  PlayCircle
+  PlayCircle,
+  Layers
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
 const ProjectDetails = () => {
   const { id } = useParams();
@@ -36,9 +37,9 @@ const ProjectDetails = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [newUpdate, setNewUpdate] = useState('');
-  const [mediaFile, setMediaFile] = useState<File | null>(null);
-  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  
+  // Estado para múltiplos arquivos
+  const [selectedFiles, setSelectedFiles] = useState<Array<{ file: File, preview: string, type: 'image' | 'video' }>>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -73,15 +74,27 @@ const ProjectDetails = () => {
   }, [id]);
 
   const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const isVideo = file.type.startsWith('video/');
-      setMediaFile(file);
-      setMediaType(isVideo ? 'video' : 'image');
-      const reader = new FileReader();
-      reader.onloadend = () => setMediaPreview(reader.result as string);
-      reader.readAsDataURL(file);
-    }
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const newFiles = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+      type: file.type.startsWith('video/') ? 'video' as const : 'image' as const
+    }));
+
+    setSelectedFiles(prev => [...prev, ...newFiles]);
+    // Limpa o input para permitir selecionar os mesmos arquivos novamente se desejar
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles(prev => {
+      const newFiles = [...prev];
+      URL.revokeObjectURL(newFiles[index].preview);
+      newFiles.splice(index, 1);
+      return newFiles;
+    });
   };
 
   const handleAddUpdate = async (e: React.FormEvent) => {
@@ -90,18 +103,22 @@ const ProjectDetails = () => {
 
     setSubmitting(true);
     try {
-      let mediaUrl = null;
-      if (mediaFile) {
-        const fileExt = mediaFile.name.split('.').pop();
+      const mediaUrls: string[] = [];
+
+      // Upload de todos os arquivos selecionados
+      for (const item of selectedFiles) {
+        const fileExt = item.file.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
-        const folder = mediaType === 'video' ? 'project_videos' : 'project_logs';
+        const folder = item.type === 'video' ? 'project_videos' : 'project_logs';
         
         const { error: uploadError } = await supabase.storage
           .from('uploads')
-          .upload(`${folder}/${fileName}`, mediaFile);
+          .upload(`${folder}/${fileName}`, item.file);
         
         if (uploadError) throw uploadError;
-        mediaUrl = supabase.storage.from('uploads').getPublicUrl(`${folder}/${fileName}`).data.publicUrl;
+        
+        const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(`${folder}/${fileName}`);
+        mediaUrls.push(publicUrl);
       }
 
       const { error } = await supabase
@@ -109,16 +126,16 @@ const ProjectDetails = () => {
         .insert({
           project_id: id,
           content: newUpdate.trim(),
-          image_url: mediaUrl // Usamos a mesma coluna para simplificar, o código detectará o tipo na exibição
+          // Salvamos na nova coluna media_urls (array) e mantemos image_url para compatibilidade se houver apenas uma
+          media_urls: mediaUrls,
+          image_url: mediaUrls.length > 0 ? mediaUrls[0] : null
         });
 
       if (error) throw error;
 
-      showSuccess('Progresso registrado no diário!');
+      showSuccess('Progresso registrado com sucesso!');
       setNewUpdate('');
-      setMediaFile(null);
-      setMediaPreview(null);
-      setMediaType(null);
+      setSelectedFiles([]);
       fetchData();
     } catch (error: any) {
       showError(error.message || 'Erro ao salvar atualização.');
@@ -200,33 +217,40 @@ const ProjectDetails = () => {
                     rows={3}
                   />
                   
-                  {mediaPreview && (
-                    <div className="relative w-fit">
-                      {mediaType === 'video' ? (
-                        <div className="relative rounded-lg border overflow-hidden bg-black aspect-video max-h-48">
-                          <video src={mediaPreview} className="h-full w-full" />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                            <PlayCircle className="h-10 w-10 text-white opacity-80" />
-                          </div>
+                  {selectedFiles.length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {selectedFiles.map((item, idx) => (
+                        <div key={idx} className="relative aspect-square rounded-lg border overflow-hidden bg-muted">
+                          {item.type === 'video' ? (
+                            <div className="w-full h-full flex items-center justify-center bg-black">
+                              <PlayCircle className="h-6 w-6 text-white/50" />
+                            </div>
+                          ) : (
+                            <img src={item.preview} alt="Preview" className="w-full h-full object-cover" />
+                          )}
+                          <Button 
+                            variant="destructive" 
+                            size="icon" 
+                            className="absolute top-1 right-1 h-5 w-5 rounded-full shadow-lg" 
+                            onClick={() => removeSelectedFile(idx)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
                         </div>
-                      ) : (
-                        <img src={mediaPreview} alt="Preview" className="max-h-40 rounded-lg border" />
-                      )}
-                      <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow-lg" onClick={() => { setMediaPreview(null); setMediaFile(null); setMediaType(null); }}>
-                        <X className="h-3 w-3" />
-                      </Button>
+                      ))}
                     </div>
                   )}
 
                   <div className="flex justify-between items-center">
                     <div className="flex gap-2">
                       <Button variant="ghost" size="sm" className="gap-2 rounded-full" onClick={() => fileInputRef.current?.click()}>
-                        <ImageIcon className="h-4 w-4" /> Mídia
+                        <ImageIcon className="h-4 w-4" /> Adicionar Mídia
                       </Button>
                     </div>
                     <input 
                       type="file" 
                       accept="image/*,video/*" 
+                      multiple
                       className="hidden" 
                       ref={fileInputRef} 
                       onChange={handleMediaSelect} 
@@ -246,50 +270,71 @@ const ProjectDetails = () => {
                   Nenhuma atualização lançada ainda.
                 </div>
               ) : (
-                updates.map((update) => (
-                  <div key={update.id} className="relative pl-12 animate-in fade-in slide-in-from-left-4">
-                    <div className="absolute left-0 top-1 h-8 w-8 rounded-full bg-white dark:bg-slate-900 border-2 border-primary flex items-center justify-center z-10">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                    </div>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                          <Calendar className="h-3 w-3" />
-                          {format(new Date(update.created_at), "dd 'de' MMMM, yyyy", { locale: ptBR })}
-                        </div>
-                        {isOwner && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteUpdate(update.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
+                updates.map((update) => {
+                  // Prioriza media_urls, mas cai para image_url se media_urls estiver vazio
+                  const mediaList = (update.media_urls && update.media_urls.length > 0) 
+                    ? update.media_urls 
+                    : (update.image_url ? [update.image_url] : []);
+
+                  return (
+                    <div key={update.id} className="relative pl-12 animate-in fade-in slide-in-from-left-4">
+                      <div className="absolute left-0 top-1 h-8 w-8 rounded-full bg-white dark:bg-slate-900 border-2 border-primary flex items-center justify-center z-10">
+                        <div className="h-2 w-2 rounded-full bg-primary" />
                       </div>
-                      <Card className="border-none shadow-sm overflow-hidden">
-                        <CardContent className="p-6 space-y-4">
-                          <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                            {update.content}
-                          </p>
-                          {update.image_url && (
-                            <div className="rounded-xl overflow-hidden border bg-muted/30">
-                              {isVideoUrl(update.image_url) ? (
-                                <video 
-                                  src={update.image_url} 
-                                  controls 
-                                  className="w-full h-auto max-h-[500px] bg-black"
-                                />
-                              ) : (
-                                <img 
-                                  src={update.image_url} 
-                                  alt="Update" 
-                                  className="w-full h-auto max-h-[500px] object-contain mx-auto" 
-                                />
-                              )}
-                            </div>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                            <Calendar className="h-3 w-3" />
+                            {format(new Date(update.created_at), "dd 'de' MMMM, yyyy", { locale: ptBR })}
+                          </div>
+                          {isOwner && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteUpdate(update.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           )}
-                        </CardContent>
-                      </Card>
+                        </div>
+                        <Card className="border-none shadow-sm overflow-hidden">
+                          <CardContent className="p-6 space-y-4">
+                            <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                              {update.content}
+                            </p>
+                            
+                            {mediaList.length > 0 && (
+                              <div className={cn(
+                                "grid gap-2 rounded-xl overflow-hidden",
+                                mediaList.length === 1 ? "grid-cols-1" : 
+                                mediaList.length === 2 ? "grid-cols-2" : 
+                                "grid-cols-2 md:grid-cols-3"
+                              )}>
+                                {mediaList.map((url: string, i: number) => (
+                                  <div key={i} className={cn(
+                                    "relative bg-muted/30 border overflow-hidden",
+                                    mediaList.length === 1 ? "aspect-video" : "aspect-square"
+                                  )}>
+                                    {isVideoUrl(url) ? (
+                                      <video 
+                                        src={url} 
+                                        controls 
+                                        className="w-full h-full object-cover bg-black"
+                                      />
+                                    ) : (
+                                      <img 
+                                        src={url} 
+                                        alt={`Update ${i}`} 
+                                        className="w-full h-full object-cover" 
+                                        loading="lazy"
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
