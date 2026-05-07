@@ -22,13 +22,25 @@ import {
   Trash2,
   PlayCircle,
   MessageSquare,
-  Heart
+  Heart,
+  Settings2,
+  Save
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import ProjectUpdateComments from '@/components/ProjectUpdateComments';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const ProjectDetails = () => {
   const { id } = useParams();
@@ -41,9 +53,18 @@ const ProjectDetails = () => {
   const [newUpdate, setNewUpdate] = useState('');
   const [activeComments, setActiveComments] = useState<Record<string, boolean>>({});
   
+  // Edit Project State
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const [updatingProject, setUpdatingProject] = useState(false);
+  
   const [selectedFiles, setSelectedFiles] = useState<Array<{ file: File, preview: string, type: 'image' | 'video' }>>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editImageInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
     if (!id) return;
@@ -56,6 +77,9 @@ const ProjectDetails = () => {
         .single();
       
       setProject(projectData);
+      setEditTitle(projectData.title);
+      setEditDescription(projectData.description);
+      setEditImagePreview(projectData.image_url);
 
       const { data: updatesData } = await supabase
         .from('project_updates')
@@ -84,6 +108,53 @@ const ProjectDetails = () => {
     fetchData();
   }, [id, user?.id]);
 
+  const handleUpdateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!project) return;
+
+    setUpdatingProject(true);
+    try {
+      let imageUrl = project.image_url;
+
+      if (editImageFile) {
+        const fileExt = editImageFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `projects/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('uploads')
+          .upload(filePath, editImageFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('uploads')
+          .getPublicUrl(filePath);
+        
+        imageUrl = publicUrl;
+      }
+
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          title: editTitle.trim(),
+          description: editDescription.trim(),
+          image_url: imageUrl
+        })
+        .eq('id', project.id);
+
+      if (error) throw error;
+
+      showSuccess('Projeto atualizado!');
+      setIsEditOpen(false);
+      fetchData();
+    } catch (error: any) {
+      showError(error.message || 'Erro ao atualizar projeto.');
+    } finally {
+      setUpdatingProject(false);
+    }
+  };
+
   const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -96,6 +167,14 @@ const ProjectDetails = () => {
 
     setSelectedFiles(prev => [...prev, ...newFiles]);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setEditImageFile(file);
+      setEditImagePreview(URL.createObjectURL(file));
+    }
   };
 
   const removeSelectedFile = (index: number) => {
@@ -156,7 +235,6 @@ const ProjectDetails = () => {
     if (!user) return;
     const hasLiked = update.has_liked;
 
-    // Atualização otimista
     setUpdates(prev => prev.map(u => {
       if (u.id === update.id) {
         return {
@@ -180,7 +258,6 @@ const ProjectDetails = () => {
           .from('project_update_likes')
           .insert({ update_id: update.id, user_id: user.id });
         
-        // Notificar o autor do projeto
         if (project.user_id !== user.id) {
           await supabase.from('notifications').insert({
             user_id: project.user_id,
@@ -192,7 +269,6 @@ const ProjectDetails = () => {
       }
     } catch (error) {
       console.error('Erro ao processar like:', error);
-      // Reverter em caso de erro real (opcional, fetchData resolverá)
     }
   };
 
@@ -227,9 +303,16 @@ const ProjectDetails = () => {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto space-y-8">
-        <Button variant="ghost" onClick={() => navigate('/projects')} className="gap-2">
-          <ArrowLeft className="h-4 w-4" /> Voltar para Projetos
-        </Button>
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" onClick={() => navigate('/projects')} className="gap-2">
+            <ArrowLeft className="h-4 w-4" /> Voltar para Projetos
+          </Button>
+          {isOwner && (
+            <Button variant="outline" size="sm" className="gap-2 rounded-full" onClick={() => setIsEditOpen(true)}>
+              <Settings2 className="h-4 w-4" /> Editar Projeto
+            </Button>
+          )}
+        </div>
 
         <div className="flex flex-col md:flex-row gap-8 items-start">
           <div className="flex-1 space-y-4">
@@ -471,6 +554,74 @@ const ProjectDetails = () => {
             </Card>
           </div>
         </div>
+
+        {/* Edit Project Dialog */}
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <form onSubmit={handleUpdateProject}>
+              <DialogHeader>
+                <DialogTitle>Editar Projeto</DialogTitle>
+                <DialogDescription>
+                  Atualize as informações principais do seu diário de projeto.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-title">Título do Projeto</Label>
+                  <Input 
+                    id="edit-title" 
+                    value={editTitle} 
+                    onChange={(e) => setEditTitle(e.target.value)} 
+                    required 
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-desc">Objetivo / Descrição</Label>
+                  <Textarea 
+                    id="edit-desc" 
+                    value={editDescription} 
+                    onChange={(e) => setEditDescription(e.target.value)} 
+                    rows={4}
+                    required 
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Imagem de Capa</Label>
+                  <div 
+                    className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => editImageInputRef.current?.click()}
+                  >
+                    {editImagePreview ? (
+                      <div className="relative">
+                        <img src={editImagePreview} alt="Preview" className="max-h-40 mx-auto rounded-lg object-contain" />
+                        <p className="text-[10px] text-muted-foreground mt-2">Clique para trocar a imagem</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <ImageIcon className="h-8 w-8 opacity-50" />
+                        <span className="text-xs">Selecione uma nova capa</span>
+                      </div>
+                    )}
+                  </div>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    ref={editImageInputRef} 
+                    onChange={handleEditImageSelect} 
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
+                <Button type="submit" disabled={updatingProject} className="gap-2">
+                  {updatingProject ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Salvar Alterações
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
