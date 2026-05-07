@@ -32,7 +32,7 @@ import ProjectUpdateComments from '@/components/ProjectUpdateComments';
 const ProjectDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [project, setProject] = useState<any>(null);
   const [updates, setUpdates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -348,7 +348,10 @@ const ProjectDetails = () => {
                             </div>
 
                             {activeComments[update.id] && (
-                              <ProjectUpdateComments updateId={update.id} />
+                              <ProjectUpdateComments 
+                                updateId={update.id} 
+                                canPin={isOwner || isAdmin} // Apenas o dono do projeto ou admin pode fixar
+                              />
                             )}
                           </CardContent>
                         </Card>
