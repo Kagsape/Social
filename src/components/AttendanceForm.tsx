@@ -7,17 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { 
   CheckCircle, 
-  XCircle, 
   Clock, 
   UserCheck, 
   UserX, 
   Calendar as CalendarIcon, 
   Loader2,
-  Users,
   CheckCheck,
   Monitor,
   Search,
-  Filter,
   UserMinus,
   AlertCircle
 } from 'lucide-react';
@@ -29,7 +26,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface AttendanceFormProps {
   courseId: string;
@@ -41,7 +37,7 @@ type AttendanceStatus = 'present' | 'absent' | 'late';
 
 const AttendanceForm: React.FC<AttendanceFormProps> = ({ 
   courseId, 
-  students, 
+  students = [], 
   onAttendanceSaved 
 }) => {
   const { user } = useAuth();
@@ -51,7 +47,7 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
   const [saving, setSaving] = useState(false);
   const [hasLabSession, setHasLabSession] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterTab, setFilterTab] = useState<'all' | 'pending' | 'present' | 'absent'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'present' | 'absent'>('all');
 
   const fetchExistingAttendance = useCallback(async () => {
     if (!courseId || !date) return;
@@ -97,7 +93,7 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
   }, [fetchExistingAttendance]);
 
   const stats = useMemo(() => {
-    const total = students.length;
+    const total = students?.length || 0;
     const present = Object.values(attendance).filter(s => s === 'present').length;
     const absent = Object.values(attendance).filter(s => s === 'absent').length;
     const late = Object.values(attendance).filter(s => s === 'late').length;
@@ -108,19 +104,20 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
   }, [students, attendance]);
 
   const filteredStudents = useMemo(() => {
+    if (!students) return [];
     return students.filter(student => {
       const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase());
       const status = attendance[student.id];
       
       if (!matchesSearch) return false;
       
-      if (filterTab === 'pending') return !status;
-      if (filterTab === 'present') return status === 'present' || status === 'late';
-      if (filterTab === 'absent') return status === 'absent';
+      if (filter === 'pending') return !status;
+      if (filter === 'present') return status === 'present' || status === 'late';
+      if (filter === 'absent') return status === 'absent';
       
       return true;
     });
-  }, [students, searchTerm, filterTab, attendance]);
+  }, [students, searchTerm, filter, attendance]);
 
   const handleAttendanceChange = (studentId: string, status: AttendanceStatus) => {
     setAttendance(prev => {
@@ -139,20 +136,18 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
       allPresent[s.id] = 'present';
     });
     setAttendance(allPresent);
-    showSuccess('Todos os alunos marcados como presente.');
+    showSuccess('Todos marcados como presente.');
   };
 
   const markRemainingAbsent = () => {
     const newAttendance = { ...attendance };
-    let count = 0;
     students.forEach(s => {
       if (!newAttendance[s.id]) {
         newAttendance[s.id] = 'absent';
-        count++;
       }
     });
     setAttendance(newAttendance);
-    if (count > 0) showSuccess(`${count} alunos marcados com falta.`);
+    showSuccess('Restantes marcados com falta.');
   };
 
   const saveAttendance = async () => {
@@ -162,13 +157,11 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
     try {
       const formattedDate = format(date, 'yyyy-MM-dd');
       
-      const { error: deleteError } = await supabase
+      await supabase
         .from('attendance')
         .delete()
         .eq('course_id', courseId)
         .eq('date', formattedDate);
-
-      if (deleteError) throw deleteError;
 
       const records = Object.entries(attendance).map(([studentId, status]) => ({
         student_id: studentId,
@@ -179,265 +172,174 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
       }));
 
       if (records.length > 0) {
-        const { error: insertError } = await supabase
-          .from('attendance')
-          .insert(records);
-
-        if (insertError) throw insertError;
+        const { error } = await supabase.from('attendance').insert(records);
+        if (error) throw error;
       }
 
-      showSuccess('Frequência salva com sucesso!');
+      showSuccess('Frequência salva!');
       onAttendanceSaved?.();
     } catch (error: any) {
-      console.error('[Attendance] Erro ao salvar:', error);
-      showError(`Erro ao salvar frequência: ${error.message}`);
+      showError(`Erro ao salvar: ${error.message}`);
     } finally {
       setSaving(false);
     }
   };
 
+  if (!students || students.length === 0) {
+    return (
+      <Card className="border-dashed py-12 text-center">
+        <CardContent className="space-y-4">
+          <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground opacity-20" />
+          <p className="text-muted-foreground">Nenhum aluno matriculado nesta turma para fazer a chamada.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="border-none shadow-lg overflow-hidden bg-white dark:bg-slate-900">
-      <CardHeader className="bg-slate-50/50 dark:bg-slate-800/30 border-b pb-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+    <Card className="border-none shadow-sm bg-white dark:bg-slate-900">
+      <CardHeader className="pb-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2 text-2xl font-black">
-              <UserCheck className="h-6 w-6 text-primary" />
-              Diário de Classe
+            <CardTitle className="text-xl font-bold flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-primary" />
+              Chamada do Dia
             </CardTitle>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="font-mono">
-                {format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-              </Badge>
-              {hasLabSession && (
-                <Badge className="bg-blue-500 hover:bg-blue-600 gap-1">
-                  <Monitor className="h-3 w-3" /> Aula no Lab
-                </Badge>
-              )}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 gap-2 rounded-lg">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    {format(date, "dd/MM/yyyy")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus />
+                </PopoverContent>
+              </Popover>
+              {hasLabSession && <Badge className="bg-blue-500 gap-1"><Monitor className="h-3 w-3" /> Lab</Badge>}
             </div>
           </div>
-          
-          <div className="flex flex-wrap gap-2 w-full md:w-auto">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="flex-1 md:w-[180px] justify-start text-left font-bold rounded-xl bg-white dark:bg-slate-950 border-2"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                  {format(date, "dd/MM/yyyy")}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={(d) => d && setDate(d)}
-                  initialFocus
-                  locale={ptBR}
-                />
-              </PopoverContent>
-            </Popover>
+
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={markAllPresent} className="rounded-lg text-xs">
+              <CheckCheck className="h-3.5 w-3.5 mr-1" /> Todos Presentes
+            </Button>
+            <Button variant="outline" size="sm" onClick={markRemainingAbsent} className="rounded-lg text-xs text-red-600">
+              <UserMinus className="h-3.5 w-3.5 mr-1" /> Faltas Restantes
+            </Button>
           </div>
         </div>
 
-        {/* Stats Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-white dark:bg-slate-950 p-3 rounded-2xl border-2 shadow-sm">
-            <p className="text-[10px] uppercase font-black text-muted-foreground mb-1">Total Alunos</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-black">{stats.total}</span>
-              <span className="text-xs text-muted-foreground">estudantes</span>
+        <div className="grid grid-cols-4 gap-2 mt-4">
+          {[
+            { label: 'Total', val: stats.total, color: 'text-foreground' },
+            { label: 'Pres.', val: stats.present + stats.late, color: 'text-green-600' },
+            { label: 'Faltas', val: stats.absent, color: 'text-red-600' },
+            { label: 'Pend.', val: stats.pending, color: 'text-amber-600' }
+          ].map((s, i) => (
+            <div key={i} className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg text-center">
+              <p className="text-[9px] uppercase font-bold text-muted-foreground">{s.label}</p>
+              <p className={cn("text-lg font-black", s.color)}>{s.val}</p>
             </div>
-          </div>
-          <div className="bg-green-50 dark:bg-green-900/10 p-3 rounded-2xl border-2 border-green-100 dark:border-green-900/30 shadow-sm">
-            <p className="text-[10px] uppercase font-black text-green-600 mb-1">Presentes</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-black text-green-600">{stats.present + stats.late}</span>
-              <span className="text-xs text-green-600/70">ativos</span>
-            </div>
-          </div>
-          <div className="bg-red-50 dark:bg-red-900/10 p-3 rounded-2xl border-2 border-red-100 dark:border-red-900/30 shadow-sm">
-            <p className="text-[10px] uppercase font-black text-red-600 mb-1">Faltas</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-black text-red-600">{stats.absent}</span>
-              <span className="text-xs text-red-600/70">ausentes</span>
-            </div>
-          </div>
-          <div className="bg-amber-50 dark:bg-amber-900/10 p-3 rounded-2xl border-2 border-amber-100 dark:border-amber-900/30 shadow-sm">
-            <p className="text-[10px] uppercase font-black text-amber-600 mb-1">Pendentes</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-black text-amber-600">{stats.pending}</span>
-              <span className="text-xs text-amber-600/70">não marcados</span>
-            </div>
-          </div>
+          ))}
         </div>
       </CardHeader>
 
-      <CardContent className="p-0">
-        <div className="p-4 border-b bg-slate-50/30 dark:bg-slate-800/10 flex flex-col md:flex-row gap-4">
+      <CardContent className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
-              placeholder="Buscar aluno pelo nome..." 
-              className="pl-10 rounded-xl border-2 focus-visible:ring-primary"
+              placeholder="Buscar aluno..." 
+              className="pl-9 h-9 rounded-lg"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Tabs value={filterTab} onValueChange={(v: any) => setFilterTab(v)} className="w-full md:w-auto">
-            <TabsList className="grid grid-cols-4 w-full rounded-xl bg-muted/50 p-1">
-              <TabsTrigger value="all" className="text-[10px] md:text-xs font-bold">Todos</TabsTrigger>
-              <TabsTrigger value="pending" className="text-[10px] md:text-xs font-bold">Faltam</TabsTrigger>
-              <TabsTrigger value="present" className="text-[10px] md:text-xs font-bold">Pres.</TabsTrigger>
-              <TabsTrigger value="absent" className="text-[10px] md:text-xs font-bold">Faltas</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="flex bg-muted p-1 rounded-lg gap-1">
+            {(['all', 'pending', 'present', 'absent'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={cn(
+                  "px-3 py-1 text-[10px] font-bold rounded-md transition-all capitalize",
+                  filter === f ? "bg-white dark:bg-slate-700 shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {f === 'all' ? 'Todos' : f === 'pending' ? 'Faltam' : f === 'present' ? 'Pres.' : 'Faltas'}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="p-4 flex flex-wrap gap-2 border-b">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={markAllPresent}
-            className="rounded-full gap-2 font-bold text-xs h-8"
-            disabled={loading || students.length === 0}
-          >
-            <CheckCheck className="h-3.5 w-3.5" /> Marcar Todos Presentes
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={markRemainingAbsent}
-            className="rounded-full gap-2 font-bold text-xs h-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-            disabled={loading || stats.pending === 0}
-          >
-            <UserMinus className="h-3.5 w-3.5" /> Marcar Restantes com Falta
-          </Button>
-        </div>
-
-        <div className="max-h-[500px] overflow-y-auto">
+        <div className="divide-y border rounded-xl overflow-hidden max-h-[400px] overflow-y-auto">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-4">
-              <Loader2 className="h-10 w-10 animate-spin text-primary/50" />
-              <p className="text-sm text-muted-foreground font-medium">Carregando lista de alunos...</p>
-            </div>
+            <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto opacity-20" /></div>
           ) : filteredStudents.length === 0 ? (
-            <div className="text-center py-20 px-4">
-              <div className="bg-slate-100 dark:bg-slate-800 h-16 w-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Search className="h-8 w-8 text-muted-foreground/50" />
-              </div>
-              <h3 className="font-bold text-lg">Nenhum aluno encontrado</h3>
-              <p className="text-sm text-muted-foreground">Tente ajustar sua busca ou filtro.</p>
-            </div>
+            <div className="p-12 text-center text-sm text-muted-foreground">Nenhum aluno encontrado.</div>
           ) : (
-            <div className="divide-y">
-              {filteredStudents.map(student => {
-                const status = attendance[student.id];
-                return (
-                  <div 
-                    key={student.id} 
-                    className={cn(
-                      "flex items-center justify-between p-4 transition-all",
-                      status === 'present' ? "bg-green-50/30 dark:bg-green-900/5" : 
-                      status === 'absent' ? "bg-red-50/30 dark:bg-red-900/5" : 
-                      status === 'late' ? "bg-amber-50/30 dark:bg-amber-900/5" : 
-                      "hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                    )}
-                  >
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className={cn(
-                        "h-10 w-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm shrink-0",
-                        status === 'present' ? "bg-green-600 text-white" : 
-                        status === 'absent' ? "bg-red-600 text-white" : 
-                        status === 'late' ? "bg-amber-500 text-white" : 
-                        "bg-slate-200 dark:bg-slate-700 text-slate-500"
+            filteredStudents.map(student => {
+              const status = attendance[student.id];
+              return (
+                <div key={student.id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <div className="min-w-0 flex-1 mr-4">
+                    <p className="font-bold text-sm truncate">{student.name}</p>
+                    {status && (
+                      <Badge variant="outline" className={cn(
+                        "text-[8px] h-4 px-1 uppercase",
+                        status === 'present' ? "border-green-500 text-green-600" : 
+                        status === 'absent' ? "border-red-500 text-red-600" : "border-amber-500 text-amber-600"
                       )}>
-                        {student.name.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-bold text-sm truncate">{student.name}</p>
-                        <p className="text-[10px] text-muted-foreground font-mono">ID: {student.id.split('-')[0]}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-1 bg-white dark:bg-slate-950 p-1 rounded-xl border shadow-sm">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleAttendanceChange(student.id, 'present')}
-                        className={cn(
-                          "h-9 px-3 rounded-lg gap-2 font-bold text-[10px] uppercase tracking-wider transition-all",
-                          status === 'present' 
-                            ? "bg-green-600 text-white hover:bg-green-700 shadow-md" 
-                            : "text-muted-foreground hover:bg-green-50 hover:text-green-600"
-                        )}
-                      >
-                        <UserCheck className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Presente</span>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleAttendanceChange(student.id, 'absent')}
-                        className={cn(
-                          "h-9 px-3 rounded-lg gap-2 font-bold text-[10px] uppercase tracking-wider transition-all",
-                          status === 'absent' 
-                            ? "bg-red-600 text-white hover:bg-red-700 shadow-md" 
-                            : "text-muted-foreground hover:bg-red-50 hover:text-red-600"
-                        )}
-                      >
-                        <UserX className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Faltou</span>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleAttendanceChange(student.id, 'late')}
-                        className={cn(
-                          "h-9 px-3 rounded-lg gap-2 font-bold text-[10px] uppercase tracking-wider transition-all",
-                          status === 'late' 
-                            ? "bg-amber-500 text-white hover:bg-amber-600 shadow-md" 
-                            : "text-muted-foreground hover:bg-amber-50 hover:text-amber-600"
-                        )}
-                      >
-                        <Clock className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Atraso</span>
-                      </Button>
-                    </div>
+                        {status === 'present' ? 'Presente' : status === 'absent' ? 'Faltou' : 'Atraso'}
+                      </Badge>
+                    )}
                   </div>
-                );
-              })}
-            </div>
+                  
+                  <div className="flex gap-1">
+                    <Button
+                      size="icon"
+                      variant={status === 'present' ? 'default' : 'outline'}
+                      className={cn("h-8 w-8 rounded-lg", status === 'present' && "bg-green-600 hover:bg-green-700")}
+                      onClick={() => handleAttendanceChange(student.id, 'present')}
+                    >
+                      <UserCheck className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant={status === 'absent' ? 'destructive' : 'outline'}
+                      className="h-8 w-8 rounded-lg"
+                      onClick={() => handleAttendanceChange(student.id, 'absent')}
+                    >
+                      <UserX className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant={status === 'late' ? 'default' : 'outline'}
+                      className={cn("h-8 w-8 rounded-lg", status === 'late' && "bg-amber-500 hover:bg-amber-600")}
+                      onClick={() => handleAttendanceChange(student.id, 'late')}
+                    >
+                      <Clock className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
 
-        <div className="p-6 bg-slate-50 dark:bg-slate-800/30 border-t">
-          {stats.pending > 0 && (
-            <div className="flex items-center gap-2 text-amber-600 mb-4 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-xl border border-amber-100 dark:border-amber-900/30">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <p className="text-xs font-bold">Atenção: Ainda restam {stats.pending} alunos sem marcação.</p>
-            </div>
-          )}
-          
-          <Button 
-            onClick={saveAttendance} 
-            disabled={saving || loading || students.length === 0}
-            className="w-full rounded-2xl h-14 text-lg font-black shadow-xl transition-all active:scale-[0.98] gap-2"
-          >
-            {saving ? (
-              <><Loader2 className="h-5 w-5 animate-spin" /> Salvando Chamada...</>
-            ) : (
-              <><CheckCircle className="h-5 w-5" /> Finalizar e Salvar Diário</>
-            )}
-          </Button>
-          <p className="text-center text-[10px] text-muted-foreground mt-4 uppercase font-bold tracking-widest">
-            Os dados serão registrados permanentemente no histórico do curso
-          </p>
-        </div>
+        <Button 
+          onClick={saveAttendance} 
+          disabled={saving || loading}
+          className="w-full rounded-xl h-12 font-bold shadow-lg gap-2"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+          Salvar Chamada
+        </Button>
       </CardContent>
     </Card>
   );
 };
 
+import { UserX } from 'lucide-react';
 export default AttendanceForm;
